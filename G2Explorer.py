@@ -328,6 +328,7 @@ class G2CmdShell(cmd.Cmd):
 
         #--set the last table name
         self.lastTableName = os.path.join(os.path.expanduser("~"), 'lastTable.txt')
+        self.lastTableData = None
 
         #--history
         self.readlineAvail = True if 'readline' in sys.modules else False
@@ -360,8 +361,10 @@ class G2CmdShell(cmd.Cmd):
                     printWithNewLines(item)
 
     def postloop(self):
-        with open(self.settingsFileName, 'w') as f:
-            json.dump(self.settingsFileData, f)
+        try:
+            with open(self.settingsFileName, 'w') as f:
+                json.dump(self.settingsFileData, f)
+        except: pass
 
     #Hide do_shell from list of APIs. Seperate help section for it
     def get_names(self):
@@ -868,7 +871,7 @@ class G2CmdShell(cmd.Cmd):
                             fileName = reply[reply.upper().find('TO') + 2:].strip()
                         else:                            
                             fileName = 'auditSample-%s.json' % sampleRecords[currentSample][0]['audit_id']
-                            fileName = os.path.join(os.path.expanduser("~"), fileName)
+                            #--fileName = os.path.join(os.path.expanduser("~"), fileName)
                         self.do_export(','.join(exportRecords) + 'to ' + fileName)
 
                 if reply.upper().startswith('Q'):
@@ -1200,7 +1203,7 @@ class G2CmdShell(cmd.Cmd):
                                 fileName = reply[reply.upper().find('TO') + 2:].strip()
                             else:                            
                                 fileName = '%s.json' % '-'.join(exportRecords)
-                                fileName = os.path.join(os.path.expanduser("~"), fileName)
+                                #fileName = os.path.join(os.path.expanduser("~"), fileName)
                             self.do_export(','.join(exportRecords) + 'to ' + fileName)
 
                     if reply.upper().startswith('Q'):
@@ -1352,7 +1355,7 @@ class G2CmdShell(cmd.Cmd):
                                 fileName = reply[reply.upper().find('TO') + 2:].strip()
                             else:                            
                                 fileName = '%s.json' % '-'.join(exportRecords)
-                                fileName = os.path.join(os.path.expanduser("~"), fileName)
+                                #fileName = os.path.join(os.path.expanduser("~"), fileName)
                             self.do_export(','.join(exportRecords) + 'to ' + fileName)
 
                     if reply.upper().startswith('Q'):
@@ -1539,7 +1542,7 @@ class G2CmdShell(cmd.Cmd):
                                 fileName = reply[reply.upper().find('TO') + 2:].strip()
                             else:                            
                                 fileName = '%s.json' % '-'.join(exportRecords)
-                                fileName = os.path.join(os.path.expanduser("~"), fileName)
+                                #fileName = os.path.join(os.path.expanduser("~"), fileName)
                             self.do_export(','.join(exportRecords) + 'to ' + fileName)
 
                     if reply.upper().startswith('Q'):
@@ -3172,8 +3175,11 @@ class G2CmdShell(cmd.Cmd):
             if pageRecords !=0 and tableRowCnt == pageRecords:
 
                 #--write to last table so can be viewed with less if necessary
-                with open(self.lastTableName,'w') as file:
-                    file.write(thisTable.get_string())
+                try:
+                    with open(self.lastTableName,'w') as file:
+                        file.write(thisTable.get_string())
+                except: pass
+                self.lastTableData = thisTable.get_string()
 
                 #--format with data in the table before printing
                 for columnData in tblColumns:
@@ -3206,8 +3212,11 @@ class G2CmdShell(cmd.Cmd):
             print(thisTable.get_string())
 
             #--write to last table so can be viewed with less if necessary
-            with open(self.lastTableName,'w') as file:
-                file.write(thisTable.get_string())
+            try: 
+                with open(self.lastTableName,'w') as file:
+                    file.write(thisTable.get_string())
+            except: pass
+            self.lastTableData = thisTable.get_string()
 
         if len(tblRows) - totalRowCnt == 0 and pageRecords != 0: #--signify done if paging and all rows displayed
             print('')
@@ -3219,8 +3228,10 @@ class G2CmdShell(cmd.Cmd):
     def do_scroll(self,arg):
         '\nLoads the last table rendered into the linux less viewer where you can use the arrow keys to scroll ' \
         '\n up and down, left and right, until you type Q to quit.\n'
-        if os.path.exists(self.lastTableName):
-            os.system('less -SR %s' % self.lastTableName)
+        #if os.path.exists(self.lastTableName):
+        #    os.system('less -SR %s' % self.lastTableName)
+        os.system('echo "%s" | less -SR ' % self.lastTableData)
+
 
     # -----------------------------
     def do_export(self,arg):
