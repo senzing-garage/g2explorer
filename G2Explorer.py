@@ -194,6 +194,16 @@ class ColoredTable(prettytable.PrettyTable):
 # ==============================
 class G2CmdShell(cmd.Cmd):
 
+    #Override function from cmd module to make command completion case insensitive
+    def completenames(self, text, *ignored):
+        dotext = 'do_'+text
+        return  [a[3:] for a in self.get_names() if a.lower().startswith(dotext.lower())]
+
+    #Hide functions from available list of Commands. Seperate help sections for some
+    def get_names(self):
+        return [n for n in dir(self.__class__) if n not in self.__hidden_methods]
+
+
     def __init__(self):
         cmd.Cmd.__init__(self)
         readline.set_completer_delims(' ')
@@ -615,6 +625,16 @@ class G2CmdShell(cmd.Cmd):
         #--display the summary if no arguments
         if not arg:
             
+            auditCategories = []
+            categoryOrder = {'MERGE': 0, 'SPLIT': 1, 'SPLIT+MERGE': 2}
+            for category in sorted(self.auditData['AUDIT'].keys(), key=lambda x: categoryOrder[x] if x in categoryOrder else 9):
+                categoryColor = categoryColors[category] if category in categoryColors else categoryColors['unknown']
+                categoryData = [colorize(category, categoryColor), colorize(fmtStatistic(self.auditData['AUDIT'][category]['COUNT']), 'bold')]
+                auditCategories.append(categoryData)
+            while len(auditCategories) < 3:
+                auditCategories.append(['', 0])
+
+
             tblTitle = 'Audit Summary from %s' % self.auditFile
             tblColumns = []
             tblColumns.append({'name': 'Statistic1', 'width': 25, 'align': 'left'})
@@ -627,7 +647,7 @@ class G2CmdShell(cmd.Cmd):
             tblRows = []
 
             row = []
-            row.append(colorize('Prior Count', self.colors['rowTitle']))
+            row.append(colorize('Prior Count', self.colors['highlight1']))
             row.append(fmtStatistic(self.auditData['ENTITY']['STANDARD_COUNT']) if 'ENTITY' in self.auditData else '0')
             row.append(fmtStatistic(self.auditData['CLUSTERS']['STANDARD_COUNT']))
             row.append(fmtStatistic(self.auditData['PAIRS']['STANDARD_COUNT']))
@@ -637,7 +657,7 @@ class G2CmdShell(cmd.Cmd):
             tblRows.append(row)
 
             row = []
-            row.append(colorize('Newer Count', self.colors['rowTitle']))
+            row.append(colorize('Newer Count', self.colors['highlight1']))
             row.append(fmtStatistic(self.auditData['ENTITY']['RESULT_COUNT']) if 'ENTITY' in self.auditData else '0')
             row.append(fmtStatistic(self.auditData['CLUSTERS']['RESULT_COUNT']))
             row.append(fmtStatistic(self.auditData['PAIRS']['RESULT_COUNT']))
@@ -647,7 +667,7 @@ class G2CmdShell(cmd.Cmd):
             tblRows.append(row)
 
             row = []
-            row.append(colorize('Common Count', self.colors['rowTitle']))
+            row.append(colorize('Common Count', self.colors['highlight1']))
             row.append(fmtStatistic(self.auditData['ENTITY']['COMMON_COUNT']) if 'ENTITY' in self.auditData else '0')
             row.append(fmtStatistic(self.auditData['CLUSTERS']['COMMON_COUNT']))
             row.append(fmtStatistic(self.auditData['PAIRS']['COMMON_COUNT']))
@@ -657,44 +677,50 @@ class G2CmdShell(cmd.Cmd):
             tblRows.append(row) 
 
             row = []
-            row.append(colorize('Precision', self.colors['rowTitle']))
-            row.append(self.auditData['ENTITY']['PRECISION'] if 'ENTITY' in self.auditData else '0')
-            row.append(self.auditData['CLUSTERS']['PRECISION'])
-            row.append(self.auditData['PAIRS']['PRECISION'])
+            row.append(auditCategories[0][0])
+            row.append(auditCategories[0][1])
+            row.append('') #(colorize(self.auditData['CLUSTERS']['INCREASE'], self.colors['good']) if self.auditData['CLUSTERS']['INCREASE'] else '')
+            row.append('') #(colorize(self.auditData['PAIRS']['INCREASE'], self.colors['good']) if self.auditData['PAIRS']['INCREASE'] else '')
             row.append('')
             row.append(colorize('Precision', self.colors['highlight1']))
             row.append(colorize(self.auditData['ACCURACY']['PRECISION'], None))
             tblRows.append(row)
 
             row = []
-            row.append(colorize('Recall', self.colors['rowTitle']))
-            row.append(self.auditData['ENTITY']['RECALL'] if 'ENTITY' in self.auditData else '0')
-            row.append(self.auditData['CLUSTERS']['RECALL'])
-            row.append(self.auditData['PAIRS']['RECALL'])
+            row.append(auditCategories[1][0])
+            row.append(auditCategories[1][1])
+            row.append('') #(colorize(self.auditData['CLUSTERS']['DECREASE'], self.colors['bad']) if self.auditData['CLUSTERS']['DECREASE'] else '')
+            row.append('') #(colorize(self.auditData['PAIRS']['DECREASE'], self.colors['bad']) if self.auditData['PAIRS']['DECREASE'] else '')
             row.append('')
             row.append(colorize('Recall', self.colors['highlight1']))
             row.append(colorize(self.auditData['ACCURACY']['RECALL'], None))
             tblRows.append(row)
 
             row = []
-            row.append(colorize('F1 Score', self.colors['rowTitle']))
-            row.append(self.auditData['ENTITY']['F1-SCORE'] if 'ENTITY' in self.auditData else '0')
-            row.append(self.auditData['CLUSTERS']['F1-SCORE'])
-            row.append(self.auditData['PAIRS']['F1-SCORE'])
+            row.append(auditCategories[2][0])
+            row.append(auditCategories[2][1])
+            row.append('') #(colorize(self.auditData['CLUSTERS']['SIMILAR'], self.colors['highlight1']) if self.auditData['CLUSTERS']['SIMILAR'] else '')
+            row.append('') #(colorize(self.auditData['PAIRS']['SIMILAR'], self.colors['highlight1']) if self.auditData['PAIRS']['SIMILAR'] else '')
             row.append('')
             row.append(colorize('F1 Score', self.colors['highlight1']))
             row.append(colorize(self.auditData['ACCURACY']['F1-SCORE'], None))
             tblRows.append(row)
-            self.renderTable(tblTitle, tblColumns, tblRows)
 
-            tblTitle = 'Affected Entities'
-            tblColumns = []
-            tblColumns.append({'name': 'Category', 'width': 25, 'align': 'left'})
-            tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
-            tblRows = []
-            for category in self.auditData['AUDIT']:
-                categoryColor = categoryColors[category] if category in categoryColors else categoryColors['unknown']
-                tblRows.append([colorize(category, categoryColor), colorize(fmtStatistic(self.auditData['AUDIT'][category]['COUNT']), 'bold')])
+            #--add any extra categories (which will occur if there were missing records)
+            if len(auditCategories) > 3:
+                i = 3
+                while i < len(auditCategories):
+                    row = []
+                    row.append(auditCategories[i][0])
+                    row.append(auditCategories[i][1])
+                    row.append('')
+                    row.append('')
+                    row.append('')
+                    row.append('')
+                    row.append('')
+                    tblRows.append(row)
+                    i += 1
+
             self.renderTable(tblTitle, tblColumns, tblRows)
 
         #--build complete report and save to a file
@@ -832,6 +858,8 @@ class G2CmdShell(cmd.Cmd):
                     #--special actions 
                     elif reply.upper().startswith('S'): #--scrolling view
                         self.do_scroll('')
+                    elif reply.upper().startswith('W2'): #--why view
+                        self.do_why(','.join(exportRecords) + ' old')
                     elif reply.upper().startswith('W'): #--why view
                         self.do_why(','.join(exportRecords))
                     elif reply.upper().startswith('E'): #--export
@@ -845,6 +873,26 @@ class G2CmdShell(cmd.Cmd):
 
                 if reply.upper().startswith('Q'):
                     break
+
+    # -----------------------------
+    def complete_auditSummary(self, text, line, begidx, endidx):
+        before_arg = line.rfind(" ", 0, begidx)
+        #if before_arg == -1:
+        #    return # arg not found
+
+        fixed = line[before_arg+1:begidx]  # fixed portion of the arg
+        arg = line[before_arg+1:endidx]
+
+        spaces = line.count(' ')
+        if spaces <= 1:
+            possibles = []
+            if self.auditData:
+                for category in self.auditData['AUDIT']:
+                    possibles.append(category)
+        else:
+            possibles = []
+
+        return [i for i in possibles if i.lower().startswith(arg.lower())]
 
     # -----------------------------
     def auditResult (self, arg, categoryColors = None):
@@ -880,7 +928,8 @@ class G2CmdShell(cmd.Cmd):
         recordList = []
         entityList = set([x['newer_id'] for x in auditRecords])
         for entityId in entityList:
-
+            if entityId == 'unknown':  #--bypass missing
+                continue
             try: 
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlags, response)
@@ -898,6 +947,8 @@ class G2CmdShell(cmd.Cmd):
             #--get the list of features for the entity
             entityFeatures = {}
             for ftypeCode in jsonData['RESOLVED_ENTITY']['FEATURES']:
+                if ftypeCode in ('REL_ANCHOR', 'REL_POINTER'):
+                    continue
                 ftypeId = self.ftypeCodeLookup[ftypeCode]['FTYPE_ID']
                 if ftypeId not in ftypesUsed:
                     ftypesUsed.append(ftypeId)
@@ -1328,14 +1379,15 @@ class G2CmdShell(cmd.Cmd):
         else:
             possibles = []
 
-        return [i for i in possibles if i.startswith(arg)]
-        #return completions
+        return [i for i in possibles if i.lower().startswith(arg.lower())]
 
     # -----------------------------
     def do_crossSourceSummary (self,arg):
         '\nDisplays the stats for the different match levels across data sources.' \
         '\n\nSyntax:' \
         '\n\tcrossSourceSummary (with no parameters displays the overall stats)' \
+        '\n\tcrossSourceSummary <dataSource1> (displays the cross matches for that data source only)' \
+
         '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel>  where 1=Matches, 2=Ambiguous Matches, 3 = Possible Matches, 4=Possibly Relateds\n'
  
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
@@ -1519,8 +1571,7 @@ class G2CmdShell(cmd.Cmd):
         else:
             possibles = []
 
-        completions = [i for i in possibles if i.startswith(arg)]
-        return completions
+        return [i for i in possibles if i.lower().startswith(arg.lower())]
 
     # -----------------------------
     def do_search(self,arg):
