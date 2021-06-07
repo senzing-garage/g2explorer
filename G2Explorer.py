@@ -1603,9 +1603,8 @@ class G2CmdShell(cmd.Cmd):
             searchJson = parmData
             searchFlags = 0
             if apiVersion['VERSION'][0:1] > '1':
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_ENTITIES 
+                searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_ALL_ENTITIES 
                 searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_FEATURE_SCORES
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_RELATIONSHIPS
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_ENTITY_NAME
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_DATA
             else:
@@ -2780,9 +2779,8 @@ class G2CmdShell(cmd.Cmd):
             #--search for this entity to get the scores against the others
             searchFlags = 0
             if apiVersion['VERSION'][0:1] > '1':
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_ENTITIES 
+                searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_ALL_ENTITIES 
                 searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_FEATURE_SCORES
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_RELATIONSHIPS
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_ENTITY_NAME
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_DATA
             else:
