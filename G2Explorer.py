@@ -29,11 +29,11 @@ try:
     import G2Paths
     from G2Product import G2Product
     from G2Database import G2Database
+    from G2Diagnostic import G2Diagnostic
     from G2Engine import G2Engine
     from G2IniParams import G2IniParams
     from G2ConfigMgr import G2ConfigMgr
     from G2Exception import G2Exception
-    oldG2Module = False
 except:
     print('\nPlease export PYTHONPATH=<path to senzing python directory>\n')
     sys.exit(1)
@@ -557,6 +557,18 @@ class G2CmdShell(cmd.Cmd):
             return
 
     # -----------------------------
+    def do_versions (self,arg):
+        '\nDisplays current and snapshot version information.\n'
+        print()
+        print('current api version is:', apiVersion['BUILD_VERSION'])
+        if self.snapshotFile:
+            if self.snapshotData and 'API_VERSION' in self.snapshotData: 
+                print('snapshot api version was:', self.snapshotData['API_VERSION'])
+            if self.snapshotData and 'RUN_DATE' in self.snapshotData: 
+                print('snapshot run date and time was:', self.snapshotData['RUN_DATE'])
+        print()
+
+    # -----------------------------
     def do_load (self,arg):
         '\nLoads statistical json files computed by G2Snapshot.py and G2Audit.py.' \
         '\n\nSyntax:' \
@@ -603,6 +615,54 @@ class G2CmdShell(cmd.Cmd):
             path = _append_slash_if_dir(path)
             completions.append(path.replace(fixed, "", 1))
         return completions
+
+    # -----------------------------
+    def xx_perfStats (self,arg):
+        '\nDisplays the performance stats of the snapshot'
+
+        if not self.snapshotData or 'PERF' not in self.snapshotData:
+            printWithNewLines('Performance stats not available on the loaded snapshot file', 'B')
+            return
+
+        print('\nPerformance statistics ...')
+        for stat in self.snapshotData['PERF']:
+            print(('  ' + stat + ' ' + '.' * 30)[0:30] + ' ' + (str(self.snapshotData['PERF'][stat])))
+
+        print()
+
+    # -----------------------------
+    def do_quickLook (self,arg):
+        '\nDisplays whats in the current database without a snapshot'
+
+        g2_diagnostic_module = G2Diagnostic()
+        g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
+        try: 
+            response = bytearray() 
+            g2_diagnostic_module.getDataSourceCounts(response)
+            response = response.decode() if response else ''
+        except G2Exception as err:
+            print(err)
+        jsonResponse = json.loads(response)
+
+        tblTitle = 'Data source counts'
+        tblColumns = []
+        tblColumns.append({'name': 'id', 'width': 5, 'align': 'center'})
+        tblColumns.append({'name': 'DataSource', 'width': 30, 'align': 'left'})
+        tblColumns.append({'name': 'EntityType', 'width': 30, 'align': 'left'})
+        tblColumns.append({'name': 'ActualRecordCount', 'width': 20, 'align': 'right'})
+        tblColumns.append({'name': 'DistinctRecordCount', 'width': 20, 'align': 'right'})
+        tblRows = []
+        for row in jsonResponse:
+            entityType = '' if row['ETYPE_CODE'] == 'GENERIC' or row['ETYPE_CODE'] == row['DSRC_CODE'] else ''
+            tblRows.append([colorize(row['DSRC_ID'], self.colors['rowTitle']),
+                            colorize(row['DSRC_CODE'], self.colors['datasource']),
+                            colorize(entityType, self.colors['datasource']),
+                            row['DSRC_RECORD_COUNT'],
+                            row['OBS_ENT_COUNT']])
+        self.renderTable(tblTitle, tblColumns, tblRows)
+
+        g2_diagnostic_module.destroy()
+
 
     # -----------------------------
     def do_auditSummary (self,arg):
@@ -1064,6 +1124,19 @@ class G2CmdShell(cmd.Cmd):
             printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
             return
 
+        #--turn esb into a list of size groups if not previously calculated
+        if type(self.snapshotData['ENTITY_SIZE_BREAKDOWN']) == dict:
+            response = input('\nPerform entity review, first? (yes/no) {note: this may take several minutes} ')            
+            reviewRequested = True if response.upper() in ('Y','YES') else False
+            self.snapshotData['ENTITY_SIZE_BREAKDOWN'] = self.summarize_entitySizeBreakdown(self.snapshotData['ENTITY_SIZE_BREAKDOWN'], reviewRequested)
+            if reviewRequested:
+                try: 
+                    with open(self.snapshotFile, 'w') as f:
+                        json.dump(self.snapshotData, f)
+                except IOError as err:
+                    print('Could not save review to %s ...' % self.snapshotFile)
+                    input('Press any key ...')
+
         if 'ENTITY_SIZE_GROUP' not in self.snapshotData['ENTITY_SIZE_BREAKDOWN'][0]:
             printWithNewLines('The statistics loaded contain an older entity size structure this viewer cannot display', 'S')
             printWithNewLines('Please take a new snapshot with G2Snapshot.py to re-compute with the latest entity size breakdown structure', 'E')
@@ -1209,6 +1282,140 @@ class G2CmdShell(cmd.Cmd):
                     if reply.upper().startswith('Q'):
                         break
                 self.currentReviewList = None
+
+    # -----------------------------
+    def summarize_entitySizeBreakdown (self, rawEntitySizeData, reviewRequested):
+
+        if reviewRequested:
+            reviewCount = sum([len(rawEntitySizeData[size]['SAMPLE']) for size in rawEntitySizeData.keys()])
+            print('\nreviewing %s entities ... ' % reviewCount)
+
+        progressCnt = 0
+        newEntitySizeData = {}
+        for entitySize in sorted([int(x) for x in rawEntitySizeData.keys()]):
+            strEntitySize = str(entitySize)
+            if entitySize < 10:
+                entitySizeLevel = entitySize
+            elif entitySize < 100:
+                entitySizeLevel = int(entitySize/10) * 10
+            else:
+                entitySizeLevel = int(entitySize/100) * 100
+
+            if entitySizeLevel not in newEntitySizeData:
+                newEntitySizeData[entitySizeLevel] = {}
+                newEntitySizeData[entitySizeLevel]['ENTITY_COUNT'] = 0
+                newEntitySizeData[entitySizeLevel]['SAMPLE_ENTITIES'] = []
+                newEntitySizeData[entitySizeLevel]['REVIEW_COUNT'] = 0
+                newEntitySizeData[entitySizeLevel]['REVIEW_FEATURES'] = []
+            newEntitySizeData[entitySizeLevel]['ENTITY_COUNT'] += rawEntitySizeData[strEntitySize]['COUNT']
+
+            for entityID in rawEntitySizeData[strEntitySize]['SAMPLE']:
+                sampleRecord = {'ENTITY_SIZE': entitySize, 'ENTITY_ID': str(entityID)}
+                if reviewRequested:
+                    reviewInfo = self.review_ESBSample(sampleRecord)
+                    sampleRecord.update(reviewInfo)
+                    if 'REVIEW_FEATURES' in reviewInfo:
+                        newEntitySizeData[entitySizeLevel]['REVIEW_COUNT'] += 1
+                        for featureCode in reviewInfo['REVIEW_FEATURES']:
+                            if featureCode not in newEntitySizeData[entitySizeLevel]['REVIEW_FEATURES']:
+                                newEntitySizeData[entitySizeLevel]['REVIEW_FEATURES'].append(featureCode)
+                    progressCnt += 1
+                    if progressCnt % 1000 == 0:
+                        print('%s entities reviewed' % progressCnt)
+
+                #--review it here
+                newEntitySizeData[entitySizeLevel]['SAMPLE_ENTITIES'].append(sampleRecord)
+
+        newEntitySizeList = []
+        for entitySize in sorted(newEntitySizeData.keys()):
+            entitySizeRecord = newEntitySizeData[entitySize]
+            entitySizeRecord['ENTITY_SIZE'] = int(entitySize)
+            entitySizeRecord['ENTITY_SIZE_GROUP'] = str(entitySize) + ('+' if int(entitySize) >= 10 else '')
+            newEntitySizeList.append(entitySizeRecord)
+
+        if reviewRequested:
+            print('%s entities reviewed, complete' % progressCnt)
+
+
+        return newEntitySizeList
+
+    # -----------------------------
+    def review_ESBSample (self, sampleRecord):
+        entitySize = sampleRecord['ENTITY_SIZE']
+        entityID = sampleRecord['ENTITY_ID']
+        if entitySize == 1:
+            return sampleRecord
+
+        #--set maximums based on entity size
+        if entitySize <= 3: #--super small
+            maxExclusiveCnt = 1
+            maxNameCnt = 2
+            maxAddrCnt = 2
+        elif entitySize <= 10: #--small
+            maxExclusiveCnt = 1
+            maxNameCnt = 3
+            maxAddrCnt = 3
+        elif entitySize <= 50: #--medium
+            maxExclusiveCnt = 1
+            maxNameCnt = 10
+            maxAddrCnt = 10
+        else: #--large
+            maxExclusiveCnt = 1 #--large
+            maxNameCnt = 25
+            maxAddrCnt = 25
+
+        #--get the entity
+        try: 
+            response = bytearray()
+            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), g2Engine.G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES, response)
+            response = response.decode() if response else ''
+        except G2Exception as err:
+            print(str(err))
+            return sampleRecord
+        try: jsonData = json.loads(response)
+        except:
+            print('warning: entity %s response=[%s]' % (entityID, response))
+            return sampleRecord
+
+        #print('entityID %s, size %s' % (entityID, entitySize))
+
+        featureInfo = {}
+        for ftypeCode in jsonData['RESOLVED_ENTITY']['FEATURES']:
+            distinctFeatureCount = 0
+            for distinctFeature in jsonData['RESOLVED_ENTITY']['FEATURES'][ftypeCode]:
+                if ftypeCode == 'GENDER' and distinctFeature['FEAT_DESC'] not in ('M', 'F'): #--don't count invalid genders
+                    continue
+                distinctFeatureCount += 1
+            if ftypeCode not in featureInfo:
+                featureInfo[ftypeCode] = 0
+            featureInfo[ftypeCode] += distinctFeatureCount
+
+        reviewFeatures = []
+        for ftypeCode in featureInfo:
+            distinctFeatureCount = featureInfo[ftypeCode]
+
+            #--watch lists have more multiple features per record like 5 dobs and 10 names!
+            if distinctFeatureCount > entitySize:
+                continue
+
+            frequency = self.ftypeCodeLookup[ftypeCode]['FTYPE_FREQ']
+            exclusive = str(self.ftypeCodeLookup[ftypeCode]['FTYPE_EXCL']).upper() in ('1', 'Y', 'YES')
+
+            needsReview = False
+            if exclusive and distinctFeatureCount > maxExclusiveCnt:
+                needsReview = True
+            elif ftypeCode == 'NAME' and distinctFeatureCount > maxNameCnt:
+                needsReview = True
+            elif ftypeCode == 'ADDRESS' and distinctFeatureCount > maxAddrCnt:
+                needsReview = True
+
+            if needsReview: 
+                reviewFeatures.append(ftypeCode)
+
+        if reviewFeatures:
+            featureInfo['REVIEW_FEATURES'] = reviewFeatures
+ 
+        return featureInfo
 
     # -----------------------------
     def do_dataSourceSummary (self, arg):
@@ -1390,8 +1597,7 @@ class G2CmdShell(cmd.Cmd):
         '\n\nSyntax:' \
         '\n\tcrossSourceSummary (with no parameters displays the overall stats)' \
         '\n\tcrossSourceSummary <dataSource1> (displays the cross matches for that data source only)' \
-
-        '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel>  where 1=Matches, 2=Ambiguous Matches, 3 = Possible Matches, 4=Possibly Relateds\n'
+        '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous Matches, 3 = Possible Matches, 4=Possibly Relateds\n'
  
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
             printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
@@ -1603,8 +1809,9 @@ class G2CmdShell(cmd.Cmd):
             searchJson = parmData
             searchFlags = 0
             if apiVersion['VERSION'][0:1] > '1':
-                searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_ALL_ENTITIES 
+                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_ENTITIES 
                 searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_FEATURE_SCORES
+                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_RELATIONSHIPS
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_ENTITY_NAME
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_DATA
             else:
@@ -2779,8 +2986,9 @@ class G2CmdShell(cmd.Cmd):
             #--search for this entity to get the scores against the others
             searchFlags = 0
             if apiVersion['VERSION'][0:1] > '1':
-                searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_ALL_ENTITIES 
+                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_ENTITIES 
                 searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_FEATURE_SCORES
+                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_RELATIONSHIPS
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_ENTITY_NAME
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_DATA
             else:
@@ -3003,25 +3211,16 @@ class G2CmdShell(cmd.Cmd):
                 features[libFeatId]['matchedFeatId'] = bestScoreRecord['matchedFeatId']
                 features[libFeatId]['matchedFeatDesc'] = bestScoreRecord['matchedFeatDesc']
                 features[libFeatId]['featBehavior'] = bestScoreRecord['featBehavior']
-                #--BUG WHERE FEATURE SECTION DOES NOT CONTAIN A SCORED FEATURE
-                #if features[libFeatId]['ftypeId'] == -1:
-                #    features[libFeatId]['ftypeId'] = self.ftypeCodeLookup[ftypeCode]['FTYPE_ID']
-                #    features[libFeatId]['ftypeCode'] = ftypeCode
-                #    features['features'][libFeatId]['featDesc'] = libFeatDesc
-
+ 
         return whyKey, features
 
     # -----------------------------
     def do_score(self, arg): 
+        '\nCompares any two features and shows the scores returned.\n' \
         '\nSyntax:' \
-        '\n\ttry [{"name_last": "Smith", "name_first": "Joseph"}, {"name_last": "Smith", "name_first": "Joe"}]' \
-        '\n\nRequired config: use G2ConfigTool.py to add these configurations one time' \
-        '\n\taddEntityClass {"entityClass": "TRY_ECLASS"}' \
-        '\n\taddEntityType {"entityType":"TRY_ETYPE", "class": "TRY_ECLASS"}' \
-        '\n\taddDataSource {"dataSource": "TRY_DSRC"}' \
-        '\n\tsave  <-- don''t forget to save!' \
-        '\n\nNote:' \
-        '\n\tif you see TRUSTED_ID in the score results, it means the records would not resolve on their own.\n' 
+        '\n\tscore [{"name_last": "Smith", "name_first": "Joseph"}, {"name_last": "Smith", "name_first": "Joe"}]' \
+        '\n\tscore [{"addr_full": "111 First St, Anytown, USA"}, {"addr_full": "111 First Street, Anytown"}]' \
+        '\n\tscore [{"passport_number": "1231234", "passport_country": "US"}, {"passport_number": "1231234", "passport_country": "USA"}]'
 
         if not argCheck('do_score', arg, self.do_score.__doc__):
             return
@@ -3035,103 +3234,24 @@ class G2CmdShell(cmd.Cmd):
             print('json parameters are invalid, see example in help')
             return
 
-        #--get the first record json from the database
-        if "DATA_SOURCE" in record1json and "RECORD_ID" in record1json and len(record1json.keys()) == 2: 
-            try:
-                response = bytearray()
-                retcode = g2Engine.getRecord(record1json['DATA_SOURCE'], record1json['RECORD_ID'], response)
-                response = response.decode() if response else ''
-            except G2Exception as err:
-                printWithNewLines(str(err), 'B')
-                return
-            else:
-                if len(response) == 0:
-                    printWithNewLines('0 records found for %s' % entityId, 'B')
-                    return
-            jsonData = json.loads(response)
-            record1json = dictKeysUpper(jsonData['JSON_DATA'])
-        #--use the temp data source and entity type
-        record1json['DATA_SOURCE'] = 'TRY_DSRC'
-        record1json['ENTITY_TYPE'] = 'TRY_ETYPE'
-        record1json['RECORD_ID'] = 'TRY_RECORD_1' #--if 'RECORD_ID' not in record1json else record1json['RECORD_ID']
+        #--use the test data source and entity type
+        record1json['TRUSTED_ID_NUMBER'] = 'SCORE_TEST'
+        record2json['TRUSTED_ID_NUMBER'] = 'SCORE_TEST'
 
-        #--get second record json from the database
-        if "DATA_SOURCE" in record2json and "RECORD_ID" in record2json and len(record2json.keys()) == 2: 
-            try:
-                response = bytearray()
-                retcode = g2Engine.getRecord(record2json['DATA_SOURCE'], record2json['RECORD_ID'], response)
-                response = response.decode() if response else ''
-            except G2Exception as err:
-                printWithNewLines(str(err), 'B')
-                return
-            else:
-                if len(response) == 0:
-                    printWithNewLines('0 records found for %s' % entityId, 'B')
-                    return
-            jsonData = json.loads(response)
-            record2json = dictKeysUpper(jsonData['JSON_DATA'])
-        #--use the temp data source and entity type
-        record2json['DATA_SOURCE'] = 'TRY_DSRC'
-        record2json['ENTITY_TYPE'] = 'TRY_ETYPE'
-        record2json['RECORD_ID'] = 'TRY_RECORD_2' #-- if 'RECORD_ID' not in record2json else record2json['RECORD_ID']
+        #--add the records
+        try: 
+            retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_1', json.dumps(record1json))
+            retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_2', json.dumps(record2json))
+        except G2Exception as err:
+            print(str(err))
+            return
 
-        while True:
-
-            #--add the two records
-            try: 
-                retcode = g2Engine.addRecord(record1json['DATA_SOURCE'], record1json['RECORD_ID'], json.dumps(record1json))
-                retcode = g2Engine.addRecord(record2json['DATA_SOURCE'], record2json['RECORD_ID'], json.dumps(record2json))
-            except G2Exception as err:
-                print(str(err))
-                return
-
-            #--get the first entity_id
-            try:
-                response = bytearray()
-                retcode = g2Engine.getEntityByRecordID(record1json['DATA_SOURCE'], record1json['RECORD_ID'], response)
-                response = response.decode() if response else ''
-            except G2Exception as err:
-                print(str(err))
-                return
-            else:
-                if len(response) == 0:
-                    print('0 records found for %s %s' % (record1json['DATA_SOURCE'], record1json['RECORD_ID']))
-                    return
-            entity1id = json.loads(response)['RESOLVED_ENTITY']['ENTITY_ID']
-
-            #--get the second entity_id
-            try:
-                response = bytearray()
-                retcode = g2Engine.getEntityByRecordID(record2json['DATA_SOURCE'], record2json['RECORD_ID'], response)
-                response = response.decode() if response else ''
-            except G2Exception as err:
-                print(str(err))
-                return
-            else:
-                if len(response) == 0:
-                    print('0 records found for %s %s' % (record2json['DATA_SOURCE'], record2json['RECORD_ID']))
-                    return
-            entity2id = json.loads(response)['RESOLVED_ENTITY']['ENTITY_ID']
-
-            #--do a why on the temporary entities
-            if entity2id == entity1id:
-                self.do_why([entity1id])
-                break
-            else:
-                if False: #--try for why not
-                    self.do_why([entity1id, entity2id])
-                else: #--must resolve to continue
-                    if 'TRUSTED_ID_NUMBER' in record1json:
-                        print('records did not resolve!')
-                        break
-                    else:  
-                        record1json['TRUSTED_ID_NUMBER'] = 'FORCE_RESOLVE'
-                        record2json['TRUSTED_ID_NUMBER'] = 'FORCE_RESOLVE'
+        self.do_why('TEST SCORE_RECORD_1 TEST SCORE_RECORD_2')
 
         #--delete the two temporary records 
         try: 
-            retcode = g2Engine.deleteRecord(record1json['DATA_SOURCE'], record1json['RECORD_ID'])
-            retcode = g2Engine.deleteRecord(record2json['DATA_SOURCE'], record2json['RECORD_ID'])
+            retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_1')
+            retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_2')
         except G2Exception as err:
             print(str(err))
             return
@@ -3164,7 +3284,7 @@ class G2CmdShell(cmd.Cmd):
         for row in tblRows:
             totalRowCnt += 1
             tableRowCnt += 1
-            row[0] = '\n'.join([i for i in row[0].split('\n')])
+            row[0] = '\n'.join([i for i in str(row[0]).split('\n')])
             if self.usePrettyTable:
                 thisTable.add_row(row)
             else:
@@ -3226,10 +3346,10 @@ class G2CmdShell(cmd.Cmd):
     def do_scroll(self,arg):
         '\nLoads the last table rendered into the linux less viewer where you can use the arrow keys to scroll ' \
         '\n up and down, left and right, until you type Q to quit.\n'
-        #if os.path.exists(self.lastTableName):
-        #    os.system('less -SR %s' % self.lastTableName)
-        os.system('echo "%s" | less -SR ' % self.lastTableData)
-
+        if os.path.exists(self.lastTableName):
+            os.system('less -SR %s' % self.lastTableName)
+        else:
+            os.system('echo "%s" | less -SR ' % self.lastTableData)
 
     # -----------------------------
     def do_export(self,arg):
@@ -3579,7 +3699,7 @@ if __name__ == '__main__':
     prompt = '(g2) '
     print(splash)
 
-     #--try to initialize the g2engine
+    #--try to initialize the g2engine
     try:
         g2Engine = G2Engine()
         iniParamCreator = G2IniParams()
