@@ -7,12 +7,13 @@ import json
 import os
 import platform
 import re
-import subprocess
 import sys
 import textwrap
 import traceback
 from collections import OrderedDict
 import configparser
+import subprocess
+import tempfile
 try:
     import readline
     import atexit
@@ -97,12 +98,13 @@ def colorize(string, colorList = None):
 class ColoredTable(prettytable.PrettyTable):
 
     def __init__(self, field_names=None, **kwargs):
-        new_options = ['title_color', 'header_color']
+        new_options = ['title_color', 'header_color', 'title_justify']
 
         super(ColoredTable, self).__init__(field_names, **kwargs)
 
         self._title_color = kwargs['title_color'] or None
         self._header_color = kwargs['header_color'] or None
+        self._title_justify = kwargs['title_justify'] or 'c'
 
         self._options.extend(new_options)
 
@@ -125,10 +127,11 @@ class ColoredTable(prettytable.PrettyTable):
         endpoint = options["vertical_char"] if options["vrules"] in (self.ALL, self.FRAME) else " "
         bits.append(endpoint)
         title = " " * lpad + title + " " * rpad
+
         if options['title_color']:
-            bits.append(colorize(self._justify(title, len(self._hrule) - 2, "c"), options['title_color']))
+            bits.append(colorize(self._justify(title, len(self._hrule) - 2, options['title_justify']), options['title_color']))
         else:
-            bits.append(self._justify(title, len(self._hrule) - 2, "c"))
+            bits.append(self._justify(title, len(self._hrule) - 2, options['title_justify']))
 
         bits.append(endpoint)
         lines.append("".join(bits))
@@ -325,10 +328,6 @@ class G2CmdShell(cmd.Cmd):
         else:
             self.auditFile = None
             self.auditData = {}
-
-        #--set the last table name
-        self.lastTableName = os.path.join(os.path.expanduser("~"), 'lastTable.txt')
-        self.lastTableData = None
 
         #--history
         self.readlineAvail = True if 'readline' in sys.modules else False
@@ -632,7 +631,7 @@ class G2CmdShell(cmd.Cmd):
 
     # -----------------------------
     def do_quickLook (self,arg):
-        '\nDisplays whats in the current database without a snapshot'
+        '\nDisplays current data source stats without a snapshot'
 
         g2_diagnostic_module = G2Diagnostic()
         g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
@@ -1941,7 +1940,7 @@ class G2CmdShell(cmd.Cmd):
                     matchList[i][0] = str(i+1)
                     matchList[i][1] = colorize(matchList[i][1], self.colors['entityid'])
                     matchList[i][2] = matchList[i][2]
-                self.renderTable(tblTitle, tblColumns, matchList, pageRecords=10)
+                self.renderTable(tblTitle, tblColumns, matchList)
 
             print('')
 
@@ -1980,6 +1979,7 @@ class G2CmdShell(cmd.Cmd):
                 arg = str(self.lastSearchResult[int(lastToken)-1])
 
         getFlags = 0
+
         if apiVersion['VERSION'][0:1] > '1':
             #getFlags = g2Engine.G2_ENTITY_DEFAULT_FLAGS
             getFlags = getFlags | g2Engine.G2_ENTITY_INCLUDE_ENTITY_NAME
@@ -2023,18 +2023,89 @@ class G2CmdShell(cmd.Cmd):
         if len(response) == 0:
             printWithNewLines('0 records found %s' % response, 'B')
             return -1 if calledDirect else 0
+
+        resolvedJson = json.loads(str(response))
+        relatedEntityCount = len(resolvedJson['RELATED_ENTITIES']) if 'RELATED_ENTITIES' in resolvedJson else 0
+        entityID = str(resolvedJson['RESOLVED_ENTITY']['ENTITY_ID'])
+        entityName = resolvedJson['RESOLVED_ENTITY']['ENTITY_NAME']
+
+        reportType = 'Detail' if showDetail else 'Summary'
+        tblTitle = f'Entity {reportType} for: {entityID} - {entityName}'
+        tblColumns = []
+        tblColumns.append({'name': 'Record ID', 'width': 50, 'align': 'left'})
+        tblColumns.append({'name': 'Entity Data', 'width': 100, 'align': 'left'})
+        tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
+
+        #--summarize by data source
+        if reportType == 'Summary':
+            dataSources = {}
+            recordList = []
+            for record in resolvedJson['RESOLVED_ENTITY']['RECORDS']:
+                if record['DATA_SOURCE'] not in dataSources:
+                    dataSources[record['DATA_SOURCE']] = []
+                dataSources[record['DATA_SOURCE']].append(record)
+
+            #--summarize by data source
+            for dataSource in sorted(dataSources):
+                recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
+                row = [recordData, entityData, otherData]
+                recordList.append(row)
+
+        #--display each record
         else:
-            resolvedJson = json.loads(str(response))
+            recordList = []
+            for record in sorted(resolvedJson['RESOLVED_ENTITY']['RECORDS'], key = lambda k: (k['DATA_SOURCE'], k['RECORD_ID'])):
+                recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
+                row = [recordData, entityData, otherData]
+                recordList.append(row)
 
-            if showDetail: 
-                self.showEntityDetail(resolvedJson)    
-            else:
-                self.showEntitySummary(resolvedJson)
+        #--display if no relationships
+        if relatedEntityCount == 0:
+            self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'])
+            return 0
 
+        #--otherwise begin the report and add the relationships
+        self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'], displayFlag='begin')
+
+        relationships = []
+        for relatedEntity in resolvedJson['RELATED_ENTITIES']:
+            relationship = {}
+            relationship['MATCH_LEVEL'] = relatedEntity['MATCH_LEVEL']
+            relationship['MATCH_SCORE'] = relatedEntity['MATCH_SCORE']
+            relationship['MATCH_KEY'] = relatedEntity['MATCH_KEY']
+            relationship['ERRULE_CODE'] = relatedEntity['ERRULE_CODE']
+            relationship['ENTITY_ID'] = relatedEntity['ENTITY_ID']
+            relationship['ENTITY_NAME'] = relatedEntity['ENTITY_NAME']
+            relationship['DATA_SOURCES'] = []
+            for dataSource in relatedEntity['RECORD_SUMMARY']:
+                relationship['DATA_SOURCES'].append('%s (%s)' %(colorize(dataSource['DATA_SOURCE'], self.colors['datasource']), dataSource['RECORD_COUNT']))
+            relationships.append(relationship)
+
+        tblTitle = f'{relatedEntityCount} related entities'
+        tblColumns = []
+        tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'left'})
+        tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
+        tblColumns.append({'name': 'Data Sources', 'width': 75, 'align': 'left'})
+        tblColumns.append({'name': 'Match Level', 'width': 25, 'align': 'left'})
+        tblColumns.append({'name': 'Match Key', 'width': 50, 'align': 'left'})
+        relatedRecordList = []
+        for relationship in sorted(relationships, key = lambda k: k['MATCH_LEVEL']):
+            row = []
+            row.append(colorize(str(relationship['ENTITY_ID']), self.colors['entityid']))
+            row.append(relationship['ENTITY_NAME'])
+            row.append('\n'.join(sorted(relationship['DATA_SOURCES'])))
+            row.append(self.relatedMatchLevels[relationship['MATCH_LEVEL']])
+            matchData = {}
+            matchData['matchKey'] = relationship['MATCH_KEY']
+            matchData['ruleCode'] = self.getRuleDesc(relationship['ERRULE_CODE'])
+            row.append(formatMatchData(matchData, self.colors))
+            relatedRecordList.append(row)
+                
+        self.renderTable(tblTitle, tblColumns, relatedRecordList, titleColor=self.colors['entityTitle'], titleJustify='l', displayFlag='end')
         return 0
 
     # -----------------------------
-    def formatRecords(self, recordList, reportName):
+    def formatRecords(self, recordList, reportType):
         dataSource = 'unknown'
         recordIdList = []
         primaryNameList = []
@@ -2050,7 +2121,7 @@ class G2CmdShell(cmd.Cmd):
             dataSource = colorize(record['DATA_SOURCE'], self.colors['datasource']) 
 
             recordIdData = record['RECORD_ID']
-            if reportName == 'entityDetail':
+            if reportType == 'Detail':
                 if record['MATCH_KEY']:
                     matchData = {}
                     matchData['matchKey'] = record['MATCH_KEY']
@@ -2074,17 +2145,17 @@ class G2CmdShell(cmd.Cmd):
             for item in record['IDENTIFIER_DATA']:
                 identifierList.append(colorizeAttribute(item, self.colors['highlight1']))
             for item in sorted(record['OTHER_DATA']):
-                if not self.isInternalAttribute(item) or reportName == 'entityDetail':
+                if not self.isInternalAttribute(item) or reportType == 'Detail':
                     otherList.append(colorizeAttribute(item, self.colors['highlight1']))
 
         recordDataList = [dataSource] + sorted(recordIdList)
         entityDataList = list(set(primaryNameList)) + list(set(otherNameList)) + sorted(set(attributeList)) + sorted(set(identifierList)) + list(set(addressList)) + list(set(phoneList))
         otherDataList = sorted(set(otherList))
 
-        if reportName == 'entitySummary':
-            columnHeightLimit = 50
-        else:
+        if reportType == 'Detail':
             columnHeightLimit = 1000
+        else:
+            columnHeightLimit = 50
 
         recordData = '\n'.join(recordDataList[:columnHeightLimit])
         if len(recordDataList) > columnHeightLimit:
@@ -2099,103 +2170,6 @@ class G2CmdShell(cmd.Cmd):
              otherData += '\n+%s more ' % str(len(otherDataList) - columnHeightLimit)
 
         return recordData, entityData, otherData
-
-    # -----------------------------
-    def showEntitySummary(self, resolvedJson):
-
-        entityID = str(resolvedJson['RESOLVED_ENTITY']['ENTITY_ID'])
-        tblTitle = 'Entity Summary for: %s - %s' % (entityID, resolvedJson['RESOLVED_ENTITY']['ENTITY_NAME'])
-        tblColumns = []
-        tblColumns.append({'name': 'Record ID', 'width': 50, 'align': 'left'})
-        tblColumns.append({'name': 'Entity Data', 'width': 100, 'align': 'left'})
-        tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
-
-        #--group by data source
-        dataSources = {}
-        recordList = []
-        for record in resolvedJson['RESOLVED_ENTITY']['RECORDS']:
-            if record['DATA_SOURCE'] not in dataSources:
-                dataSources[record['DATA_SOURCE']] = []
-            dataSources[record['DATA_SOURCE']].append(record)
-
-        #--summarize by data source
-        for dataSource in sorted(dataSources):
-            recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], 'entitySummary')
-            row = [recordData, entityData, otherData]
-            recordList.append(row)
-        self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'])
-
-        #--show relationships if there are any and not reviewing a list
-        if 'RELATED_ENTITIES' in resolvedJson and len(resolvedJson['RELATED_ENTITIES']) > 0 and not self.currentReviewList:
-            self.showRelatedEntities(resolvedJson)
-
-
-    # -----------------------------
-    def showEntityDetail(self, resolvedJson):
-
-        tblTitle = 'Entity Detail for: %s - %s' % (resolvedJson['RESOLVED_ENTITY']['ENTITY_ID'], resolvedJson['RESOLVED_ENTITY']['ENTITY_NAME'])
-        tblColumns = []
-        tblColumns.append({'name': 'Record ID', 'width': 50, 'align': 'left'})
-        tblColumns.append({'name': 'Entity Data', 'width': 100, 'align': 'left'})
-        tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
-
-        recordList = []
-        for record in sorted(resolvedJson['RESOLVED_ENTITY']['RECORDS'], key = lambda k: (k['DATA_SOURCE'], k['RECORD_ID'])):
-            recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
-            row = [recordData, entityData, otherData]
-            recordList.append(row)
-        self.renderTable(tblTitle, tblColumns, recordList, pageRecords=5, titleColor=self.colors['entityTitle'])
-
-        #--not trying to analyze entities here
-        if 'RELATED_ENTITIES' in resolvedJson and len(resolvedJson['RELATED_ENTITIES']) > 0:
-            self.showRelatedEntities(resolvedJson)
-
-    # -----------------------------
-    def showRelatedEntities(self, resolvedJson):
-
-        #--determine what, if any relationships exist
-        relationships = []
-        for relatedEntity in resolvedJson['RELATED_ENTITIES']:
-            relationship = {}
-            relationship['MATCH_LEVEL'] = relatedEntity['MATCH_LEVEL']
-            relationship['MATCH_SCORE'] = relatedEntity['MATCH_SCORE']
-            relationship['MATCH_KEY'] = relatedEntity['MATCH_KEY']
-            relationship['ERRULE_CODE'] = relatedEntity['ERRULE_CODE']
-            relationship['ENTITY_ID'] = relatedEntity['ENTITY_ID']
-            relationship['ENTITY_NAME'] = relatedEntity['ENTITY_NAME']
-            relationship['DATA_SOURCES'] = []
-            for dataSource in relatedEntity['RECORD_SUMMARY']:
-                relationship['DATA_SOURCES'].append('%s (%s)' %(colorize(dataSource['DATA_SOURCE'], self.colors['datasource']), dataSource['RECORD_COUNT']))
-            relationships.append(relationship)
-
-        reply = input('%s relationships found, press D to display %s or enter to skip ... ' % (len(relationships), ('it' if len(relationships) ==1 else 'them')))
-        if reply:
-            removeFromHistory()
-        print('')
-
-        if reply.upper().startswith('D'):
-
-            tblTitle = 'Entities related to: %s - %s' % (resolvedJson['RESOLVED_ENTITY']['ENTITY_ID'], resolvedJson['RESOLVED_ENTITY']['ENTITY_NAME'])
-            tblColumns = []
-            tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'left'})
-            tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
-            tblColumns.append({'name': 'Data Sources', 'width': 75, 'align': 'left'})
-            tblColumns.append({'name': 'Match Level', 'width': 25, 'align': 'left'})
-            tblColumns.append({'name': 'Match Key', 'width': 50, 'align': 'left'})
-            relatedRecordList = []
-            for relationship in sorted(relationships, key = lambda k: k['MATCH_LEVEL']):
-                row = []
-                row.append(colorize(str(relationship['ENTITY_ID']), self.colors['entityid']))
-                row.append(relationship['ENTITY_NAME'])
-                row.append('\n'.join(sorted(relationship['DATA_SOURCES'])))
-                row.append(self.relatedMatchLevels[relationship['MATCH_LEVEL']])
-                matchData = {}
-                matchData['matchKey'] = relationship['MATCH_KEY']
-                matchData['ruleCode'] = self.getRuleDesc(relationship['ERRULE_CODE'])
-                row.append(formatMatchData(matchData, self.colors))
-                relatedRecordList.append(row)
-                
-            self.renderTable(tblTitle, tblColumns, relatedRecordList, titleColor=self.colors['entityTitle'])
 
     # -----------------------------
     def getAmbiguousEntitySet(self, entityId):
@@ -3261,9 +3235,13 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def renderTable(self, tblTitle, tblColumns, tblRows, **kwargs):
 
+        #--display flags (start/append/done) allow for multiple tables to be displayed together and scrolled as one
+        #--such as an entity and its relationships
+
         #--possible kwargs
-        pageRecords = kwargs['pageRecords'] if 'pageRecords' in kwargs else 0
+        displayFlag = kwargs['displayFlag'] if 'displayFlag' in kwargs else None 
         titleColor = kwargs['titleColor'] if 'titleColor' in kwargs else self.colors['tableTitle']
+        titleJustify = kwargs['titleJustify'] if 'titleJustify' in kwargs else 'l' #--left
         headerColor = kwargs['headerColor'] if 'headerColor' in kwargs else self.colors['columnHeader']
 
         #--setup the table
@@ -3273,83 +3251,67 @@ class G2CmdShell(cmd.Cmd):
             tableWidth += tblColumns[i]['width']
             tblColumns[i]['name'] = str(tblColumns[i]['name'])
             columnHeaderList.append(tblColumns[i]['name'])
-        tableObject = ColoredTable(title_color=titleColor, header_color=headerColor)
+        tableObject = ColoredTable(title_color=titleColor, header_color=headerColor, title_justify=titleJustify)
         tableObject.hrules = prettytable.ALL
         tableObject.title = tblTitle
         tableObject.field_names = columnHeaderList
     
         thisTable = tableObject.copy()
         totalRowCnt = 0
-        tableRowCnt = 0
         for row in tblRows:
             totalRowCnt += 1
-            tableRowCnt += 1
             row[0] = '\n'.join([i for i in str(row[0]).split('\n')])
             if self.usePrettyTable:
                 thisTable.add_row(row)
             else:
                 thisTable.append_row(row)
 
-            if pageRecords !=0 and tableRowCnt == pageRecords:
+        #--format with data in the table
+        for columnData in tblColumns:
+            thisTable.max_width[str(columnData['name'])] = columnData['width']
+            thisTable.align[str(columnData['name'])] = columnData['align'][0:1].lower()
 
-                #--write to last table so can be viewed with less if necessary
-                try:
-                    with open(self.lastTableName,'w') as file:
-                        file.write(thisTable.get_string())
-                except: pass
-                self.lastTableData = thisTable.get_string()
+        #--write to a file so can be viewed with less
+        #--also write to the lastTableData variable in case canot write to file
+        fmtTableString = thisTable.get_string() + '\n'
+        writeMode = 'w'
+        if displayFlag in ('append', 'end'):
+            fmtTableString = '\n' + fmtTableString 
+            writeMode = 'a'
 
-                #--format with data in the table before printing
-                for columnData in tblColumns:
-                    thisTable.max_width[str(columnData['name'])] = columnData['width']
-                    thisTable.align[str(columnData['name'])] = columnData['align'][0:1].lower()
-                print(thisTable)
-                thisTable = tableObject.copy()
-                tableRowCnt = 0
+        if writeMode == 'w':
+             self.currentRenderString = fmtTableString
+        else:
+             self.currentRenderString = self.currentRenderString + fmtTableString
 
-                #--ask if they wanna continue if more to display
-                if len(tblRows) - totalRowCnt > 0:
-                    print('')
-                    reply = input('%s more records to display, press enter to continue or Q to quit ... ' % (len(tblRows) - totalRowCnt))
-                    print('')
-                    if reply:
-                        removeFromHistory()
-                    if reply and reply.upper().startswith('Q'):
-                        break
-
-        #--print any remaining rows
-        if tableRowCnt > 0:
-
-            #--format with data in the table
+        # display if a single table or done acculating tables to display
+        if not displayFlag or displayFlag == 'end':
             print('')
             if self.currentReviewList:
                 print(colorize(self.currentReviewList, 'bold'))
-            for columnData in tblColumns:
-                thisTable.max_width[str(columnData['name'])] = columnData['width']
-                thisTable.align[str(columnData['name'])] = columnData['align'][0:1].lower()
-            print(thisTable.get_string())
-
-            #--write to last table so can be viewed with less if necessary
-            try: 
-                with open(self.lastTableName,'w') as file:
-                    file.write(thisTable.get_string())
-            except: pass
-            self.lastTableData = thisTable.get_string()
-
-        if len(tblRows) - totalRowCnt == 0 and pageRecords != 0: #--signify done if paging and all rows displayed
-            print('')
-            print('%s rows returned, complete!' % totalRowCnt)
-        print('')
+            self.do_scroll('auto')
         return
 
     # -----------------------------
     def do_scroll(self,arg):
         '\nLoads the last table rendered into the linux less viewer where you can use the arrow keys to scroll ' \
         '\n up and down, left and right, until you type Q to quit.\n'
-        if os.path.exists(self.lastTableName):
-            os.system('less -SR %s' % self.lastTableName)
+
+        #--note: the F allows less to auto quit if output fits on screen
+        #-- if they purposely went into scroll mode, we should not auto-quit!
+        if arg == 'auto':  
+            lessOptions = 'FMXSR'
         else:
-            os.system('echo "%s" | less -SR ' % self.lastTableData)
+            lessOptions = 'MXSR'
+
+        #--try pipe to less on small enough files (pipe buffer usually 1mb and fills up on large entity displays)
+        less = subprocess.Popen(["less", "-FMXSR"], stdin=subprocess.PIPE)
+        try:
+            less.stdin.write(self.currentRenderString.encode('utf-8'))
+        except IOError:
+            pass
+        less.stdin.close()
+        less.wait()
 
     # -----------------------------
     def do_export(self,arg):
@@ -3734,9 +3696,7 @@ if __name__ == '__main__':
     g2ConfigMgr.destroy()
 
     #--cmdloop()
-    subprocess.Popen(["echo", "-ne", "\e[?7l"])  #--text wrapping off
     G2CmdShell().cmdloop()
-    subprocess.Popen(["echo", "-ne", "\e[?7h"])  #--text wrapping on
     print('')
 
     #--cleanups
