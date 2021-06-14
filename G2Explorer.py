@@ -857,33 +857,27 @@ class G2CmdShell(cmd.Cmd):
                 tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
                 tblRows = []
                 for subCategoryRow in subCategoryList:
-                    #if '+' in subCategoryRow['NAME'] or '-' in subCategoryRow['NAME']:
-                    #    subCategory = formatMatchData({'matchKey': subCategoryRow['NAME']}, self.colors)
-                    #else:
-                    #    subCategory = subCategoryRow['NAME']
                     tblRows.append([str(subCategoryRow['INDEX']), colorize(category, categoryColor), subCategoryRow['NAME'], fmtStatistic(subCategoryRow['COUNT'])])
                 self.renderTable(tblTitle, tblColumns, tblRows)
 
                 return
 
             #--find the detail records to display
-            subCategoryIndex = -1
-            if argList[1].isdigit() and int(argList[1]) >= 1 and int(argList[1]) <= 11:
-                subCategoryIndex = int(argList[1]) - 1
-            else:                
-                for i in range(len(subCategoryList)):
-                    if argList[1].upper() == subCategoryList[i]:
-                        subCategoryIndex = i
+            indexCategories = []
+            if argList[1].isdigit():
+                for subCategoryRow in subCategoryList:
+                    if subCategoryRow['INDEX'] == int(argList[1]):
+                        indexCategories = subCategoryRow['LIST']
                         break
 
-            if subCategoryIndex == -1:
-                printWithNewLines('%s not found, please choose a valid split or merge sub-category' % arg, 'B')
+            if not indexCategories:
+                printWithNewLines('Invalid subcategory for %s' % argList[0].lower(), 'B')
                 return
 
             #--gather sample records
             sampleRecords = []
             for subCategory in self.auditData['AUDIT'][category]['SUB_CATEGORY']:
-                if subCategory in subCategoryList[subCategoryIndex]['LIST']:
+                if subCategory in indexCategories:
                     sampleRecords += self.auditData['AUDIT'][category]['SUB_CATEGORY'][subCategory]['SAMPLE']
 
             #--display sample records
@@ -1808,9 +1802,8 @@ class G2CmdShell(cmd.Cmd):
             searchJson = parmData
             searchFlags = 0
             if apiVersion['VERSION'][0:1] > '1':
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_ENTITIES 
+                searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_ALL_ENTITIES 
                 searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_FEATURE_SCORES
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_RELATIONSHIPS
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_ENTITY_NAME
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_DATA
             else:
@@ -2960,9 +2953,8 @@ class G2CmdShell(cmd.Cmd):
             #--search for this entity to get the scores against the others
             searchFlags = 0
             if apiVersion['VERSION'][0:1] > '1':
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_ENTITIES 
+                searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_ALL_ENTITIES 
                 searchFlags = searchFlags | g2Engine.G2_SEARCH_INCLUDE_FEATURE_SCORES
-                searchFlags = searchFlags | g2Engine.G2_EXPORT_INCLUDE_ALL_RELATIONSHIPS
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_ENTITY_NAME
                 searchFlags = searchFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_DATA
             else:
@@ -3012,13 +3004,13 @@ class G2CmdShell(cmd.Cmd):
                                 matchLevel = 'DIFF'
                                 if 'GNR_FN' in bestScoreRecord:
                                     matchScore = bestScoreRecord['GNR_FN']
-                                    if 'GNR_ON' in bestScoreRecord and bestScoreRecord['GNR_ON'] > 0:
+                                    if 'GNR_ON' in bestScoreRecord and bestScoreRecord['GNR_ON'] >= 0:
                                         matchScoreDisplay = 'org:%s' % bestScoreRecord['GNR_ON']
                                     else:
                                         matchScoreDisplay = 'full:%s' % bestScoreRecord['GNR_FN']
-                                        if 'GNR_GN' in bestScoreRecord and bestScoreRecord['GNR_GN'] > 0:
+                                        if 'GNR_GN' in bestScoreRecord and bestScoreRecord['GNR_GN'] >= 0:
                                             matchScoreDisplay += '|giv:%s' % bestScoreRecord['GNR_GN']
-                                        if 'GNR_SN' in bestScoreRecord and bestScoreRecord['GNR_SN'] > 0:
+                                        if 'GNR_SN' in bestScoreRecord and bestScoreRecord['GNR_SN'] >= 0:
                                             matchScoreDisplay += '|sur:%s' % bestScoreRecord['GNR_SN']
                                     if matchScore == 100:
                                         matchLevel = 'SAME'
@@ -3152,13 +3144,13 @@ class G2CmdShell(cmd.Cmd):
 
                 if 'GNR_FN' in featRecord:
                     matchScore = featRecord['GNR_FN']
-                    if 'GNR_ON' in featRecord and featRecord['GNR_ON'] > 0:
+                    if 'GNR_ON' in featRecord and featRecord['GNR_ON'] >= 0:
                         matchScoreDisplay = 'org:%s' % featRecord['GNR_ON']
                     else:
                         matchScoreDisplay = 'full:%s' % featRecord['GNR_FN']
-                        if 'GNR_GN' in featRecord and featRecord['GNR_GN'] > 0:
+                        if 'GNR_GN' in featRecord and featRecord['GNR_GN'] >= 0:
                             matchScoreDisplay += '|giv:%s' % featRecord['GNR_GN']
-                        if 'GNR_SN' in featRecord and featRecord['GNR_SN'] > 0:
+                        if 'GNR_SN' in featRecord and featRecord['GNR_SN'] >= 0:
                             matchScoreDisplay += '|sur:%s' % featRecord['GNR_SN']
                 else:
                     matchScore = featRecord['FULL_SCORE']
