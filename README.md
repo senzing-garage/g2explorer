@@ -67,7 +67,7 @@ python3 G2Explorer.py
 Optional parameters ...
 - The -c config_file parameter is only required if your project's G2Module.ini file can't be found in the usual location.
 - The -s snapshot_file_name parameter is for convenience if you just took a snapshot and want to immediately view it.
-- The -a audit_file_name parameter is for convenience if you just ran and audit and want to immediately view it.
+- The -a audit_file_name parameter is for convenience if you just ran an audit and want to immediately view it.
 - The -d debug_output parameter turns on debug to either screen or to a file name.  This shows you what the API is returning 
 as you search and get records.  
 -- use -d SCREEN to print the debug output to the screen
@@ -135,7 +135,8 @@ Next thing to do is to just start exploring your database!  Here are a few tips 
 
 *Notes:* 
 - Be sure to type "help why" to understand what the colors and symbols mean.
-- Use "scroll" immediately after any table that is cut off as screen wrapping has been turned off. This will allow you to see the entire table and pan left and right, up and down.
+- When the output of a command is too large to fit on the screen, it is displayed with the linux command less and all of its 
+scrolling functionality is enabled.   Make sure to type q to quit when done with the oputput and ready to try another command.
 
 **browsing statistics and examples ...**
 1. load /project/snapshots/snapshot1.json *(where snapshot1.json is a file created by G2Snapshot.py)*
@@ -143,7 +144,6 @@ Next thing to do is to just start exploring your database!  Here are a few tips 
 3. dataSourceSummary customer duplicates *(to view a list of duplicate records in the customer data source)*
 4. Select (N)ext or (P)revious to move through the examples.
 5. Select (W)hy on any example you want more explanation for.
-6. Select (S)croll on any table that is cut off as screen wrapping has been turned off.
-7. Select (Q)uit to get out of the report.
+6. Select (Q)uit to get out of the report.
 
 Thats it, happy exploring!
