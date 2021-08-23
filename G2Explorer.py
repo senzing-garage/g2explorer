@@ -674,7 +674,7 @@ class G2CmdShell(cmd.Cmd):
         '\n\tauditSummary split 1 (shows examples of splits in sub-category 1)' \
         '\n\tauditSummary save to <filename.csv> (saves the entire audit report to a csv file)\n'
 
-        if not self.auditData or 'AUDIT' not in self.auditData:
+        if not self.auditData or 'ACCURACY' not in self.auditData:
             printWithNewLines('Please load a json file created with G2Audit.py to use this command', 'B')
             return
 
@@ -689,9 +689,9 @@ class G2CmdShell(cmd.Cmd):
             
             auditCategories = []
             categoryOrder = {'MERGE': 0, 'SPLIT': 1, 'SPLIT+MERGE': 2}
-            for category in sorted(self.auditData['AUDIT'].keys(), key=lambda x: categoryOrder[x] if x in categoryOrder else 9):
+            for category in sorted(self.auditData['EXAMPLES'].keys(), key=lambda x: categoryOrder[x] if x in categoryOrder else 9):
                 categoryColor = categoryColors[category] if category in categoryColors else categoryColors['unknown']
-                categoryData = [colorize(category, categoryColor), colorize(fmtStatistic(self.auditData['AUDIT'][category]['COUNT']), 'bold')]
+                categoryData = [colorize(category, categoryColor), colorize(fmtStatistic(self.auditData['EXAMPLES'][category]['COUNT']), 'bold')]
                 auditCategories.append(categoryData)
             while len(auditCategories) < 3:
                 auditCategories.append(['', 0])
@@ -710,9 +710,9 @@ class G2CmdShell(cmd.Cmd):
 
             row = []
             row.append(colorize('Prior Count', self.colors['highlight1']))
-            row.append(fmtStatistic(self.auditData['ENTITY']['STANDARD_COUNT']) if 'ENTITY' in self.auditData else '0')
-            row.append(fmtStatistic(self.auditData['CLUSTERS']['STANDARD_COUNT']))
-            row.append(fmtStatistic(self.auditData['PAIRS']['STANDARD_COUNT']))
+            row.append(fmtStatistic(self.auditData['ENTITY']['PRIOR_COUNT']) if 'ENTITY' in self.auditData else '0')
+            row.append(fmtStatistic(self.auditData['CLUSTERS']['PRIOR_COUNT']))
+            row.append(fmtStatistic(self.auditData['PAIRS']['PRIOR_COUNT']))
             row.append('')
             row.append(colorize('Prior Positives', self.colors['highlight1']))
             row.append(colorize(fmtStatistic(self.auditData['ACCURACY']['PRIOR_POSITIVE']), None))
@@ -720,9 +720,9 @@ class G2CmdShell(cmd.Cmd):
 
             row = []
             row.append(colorize('Newer Count', self.colors['highlight1']))
-            row.append(fmtStatistic(self.auditData['ENTITY']['RESULT_COUNT']) if 'ENTITY' in self.auditData else '0')
-            row.append(fmtStatistic(self.auditData['CLUSTERS']['RESULT_COUNT']))
-            row.append(fmtStatistic(self.auditData['PAIRS']['RESULT_COUNT']))
+            row.append(fmtStatistic(self.auditData['ENTITY']['NEWER_COUNT']) if 'ENTITY' in self.auditData else '0')
+            row.append(fmtStatistic(self.auditData['CLUSTERS']['NEWER_COUNT']))
+            row.append(fmtStatistic(self.auditData['PAIRS']['NEWER_COUNT']))
             row.append('')
             row.append(colorize('New Positives', categoryColors['MERGE']))
             row.append(colorize(fmtStatistic(self.auditData['ACCURACY']['NEW_POSITIVE']), None))
@@ -792,9 +792,9 @@ class G2CmdShell(cmd.Cmd):
             fileHeaders = ['category', 'sub_category', 'audit_id']
             fileRows = []
             rowCnt = 0
-            for category in self.auditData['AUDIT']:
-                for subCategory in self.auditData['AUDIT'][category]['SUB_CATEGORY']:
-                    for sampleRecords in self.auditData['AUDIT'][category]['SUB_CATEGORY'][subCategory]['SAMPLE']:
+            for category in self.auditData['EXAMPLES']:
+                for subCategory in self.auditData['EXAMPLES'][category]['SUB_CATEGORY']:
+                    for sampleRecords in self.auditData['EXAMPLES'][category]['SUB_CATEGORY'][subCategory]['SAMPLE']:
                         tableColumns, tableData = self.auditResult(sampleRecords, None) #--2nd parmater cuts out colorize for save to file
                         recordHeaders = []
                         for columnDict in tableColumns:
@@ -826,7 +826,7 @@ class G2CmdShell(cmd.Cmd):
         #--display next level report
         else:
             argList = arg.upper().split()
-            if argList[0] not in self.auditData['AUDIT']:
+            if argList[0] not in self.auditData['EXAMPLES']:
                 printWithNewLines('%s not found, please choose a valid split or merge category' % arg, 'B')
                 return
 
@@ -836,16 +836,16 @@ class G2CmdShell(cmd.Cmd):
             #--get top 10 sub categories
             i = 0
             subCategoryList = []
-            for subCategory in sorted(self.auditData['AUDIT'][category]['SUB_CATEGORY'], key=lambda x: self.auditData['AUDIT'][category]['SUB_CATEGORY'][x]['COUNT'], reverse=True):
+            for subCategory in sorted(self.auditData['EXAMPLES'][category]['SUB_CATEGORY'], key=lambda x: self.auditData['EXAMPLES'][category]['SUB_CATEGORY'][x]['COUNT'], reverse=True):
 
                 i += 1
                 if i <= 10:
-                    subCategoryList.append({'INDEX': i, 'NAME': subCategory, 'LIST': [subCategory], 'COUNT': self.auditData['AUDIT'][category]['SUB_CATEGORY'][subCategory]['COUNT']})
+                    subCategoryList.append({'INDEX': i, 'NAME': subCategory, 'LIST': [subCategory], 'COUNT': self.auditData['EXAMPLES'][category]['SUB_CATEGORY'][subCategory]['COUNT']})
                 elif i == 11:
-                    subCategoryList.append({'INDEX': i, 'NAME': 'OTHERS', 'LIST': [subCategory], 'COUNT': self.auditData['AUDIT'][category]['SUB_CATEGORY'][subCategory]['COUNT']})
+                    subCategoryList.append({'INDEX': i, 'NAME': 'OTHERS', 'LIST': [subCategory], 'COUNT': self.auditData['EXAMPLES'][category]['SUB_CATEGORY'][subCategory]['COUNT']})
                 else:
                     subCategoryList[10]['LIST'].append(subCategory)
-                    subCategoryList[10]['COUNT'] += self.auditData['AUDIT'][category]['SUB_CATEGORY'][subCategory]['COUNT']
+                    subCategoryList[10]['COUNT'] += self.auditData['EXAMPLES'][category]['SUB_CATEGORY'][subCategory]['COUNT']
 
             #--display sub-categories
             if len(argList) == 1:
@@ -876,9 +876,9 @@ class G2CmdShell(cmd.Cmd):
 
             #--gather sample records
             sampleRecords = []
-            for subCategory in self.auditData['AUDIT'][category]['SUB_CATEGORY']:
+            for subCategory in self.auditData['EXAMPLES'][category]['SUB_CATEGORY']:
                 if subCategory in indexCategories:
-                    sampleRecords += self.auditData['AUDIT'][category]['SUB_CATEGORY'][subCategory]['SAMPLE']
+                    sampleRecords += self.auditData['EXAMPLES'][category]['SUB_CATEGORY'][subCategory]['SAMPLE']
 
             #--display sample records
             currentSample = 0
@@ -943,7 +943,7 @@ class G2CmdShell(cmd.Cmd):
         if spaces <= 1:
             possibles = []
             if self.auditData:
-                for category in self.auditData['AUDIT']:
+                for category in self.auditData['EXAMPLES']:
                     possibles.append(category)
         else:
             possibles = []
@@ -2064,7 +2064,6 @@ class G2CmdShell(cmd.Cmd):
                     dataSources[record['DATA_SOURCE']] = []
                 dataSources[record['DATA_SOURCE']].append(record)
 
-            #--summarize by data source
             for dataSource in sorted(dataSources):
                 recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
                 row = [recordData, entityData, otherData]
@@ -2074,7 +2073,7 @@ class G2CmdShell(cmd.Cmd):
         else:
             recordList = []
             for record in sorted(resolvedJson['RESOLVED_ENTITY']['RECORDS'], key = lambda k: (k['DATA_SOURCE'], k['RECORD_ID'])):
-                recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
+                recordData, entityData, otherData = self.formatRecords(record, reportType)
                 row = [recordData, entityData, otherData]
                 recordList.append(row)
 
