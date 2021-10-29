@@ -634,7 +634,7 @@ class G2CmdShell(cmd.Cmd):
         '\nDisplays current data source stats without a snapshot'
 
         g2_diagnostic_module = G2Diagnostic()
-        g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
+        g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
         try: 
             response = bytearray() 
             g2_diagnostic_module.getDataSourceCounts(response)
@@ -2090,7 +2090,6 @@ class G2CmdShell(cmd.Cmd):
         for relatedEntity in resolvedJson['RELATED_ENTITIES']:
             relationship = {}
             relationship['MATCH_LEVEL'] = relatedEntity['MATCH_LEVEL']
-            relationship['MATCH_SCORE'] = relatedEntity['MATCH_SCORE']
             relationship['MATCH_KEY'] = relatedEntity['MATCH_KEY']
             relationship['ERRULE_CODE'] = relatedEntity['ERRULE_CODE']
             relationship['ENTITY_ID'] = relatedEntity['ENTITY_ID']
@@ -3733,7 +3732,7 @@ if __name__ == '__main__':
         g2Engine = G2Engine()
         iniParamCreator = G2IniParams()
         iniParams = iniParamCreator.getJsonINIParams(iniFileName)
-        g2Engine.initV2('G2Snapshot', iniParams, False)
+        g2Engine.init('G2Snapshot', iniParams, False)
     except G2Exception as err:
         print('\n%s\n' % str(err))
         sys.exit(1)
@@ -3750,7 +3749,7 @@ if __name__ == '__main__':
     #--get needed config data
     try: 
         g2ConfigMgr = G2ConfigMgr()
-        g2ConfigMgr.initV2('pyG2ConfigMgr', iniParams, False)
+        g2ConfigMgr.init('pyG2ConfigMgr', iniParams, False)
         defaultConfigID = bytearray() 
         g2ConfigMgr.getDefaultConfigID(defaultConfigID)
         defaultConfigDoc = bytearray() 
