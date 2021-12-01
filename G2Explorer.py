@@ -329,8 +329,9 @@ class G2CmdShell(cmd.Cmd):
             self.auditFile = None
             self.auditData = {}
 
-        #--default for supression data sources
+        #--default settings for data and cross sources summary reports
         self.settingsFileData['dataSourceSupression'] = self.settingsFileData.get('dataSourceSupression', True)
+        self.settingsFileData['statisticLevel'] = self.settingsFileData.get('statisticLevel', 'RECORD')
 
         #--history
         self.readlineAvail = True if 'readline' in sys.modules else False
@@ -1430,7 +1431,7 @@ class G2CmdShell(cmd.Cmd):
         '\nDisplays the stats for the different match levels within each data source.' \
         '\n\nSyntax:' \
         '\n\tdataSourceSummary (with no parameters displays the overall stats)' \
-        '\n\tdataSourceSummary <dataSourceCode> <matchLevel>  where 0=Singletons, 1=Duplicates, 2=Ambiguous Matches, 3 = Possible Matches, 4=Possibly Relateds\n'
+        '\n\tdataSourceSummary <dataSourceCode> <matchLevel>  where 0=Singletons, 1=Duplicates, 2=Ambiguous, 3=Possibles, 4=Relationships\n'
 
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
             printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
@@ -1459,11 +1460,11 @@ class G2CmdShell(cmd.Cmd):
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['ENTITY_COUNT']) if 'ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(self.snapshotData['DATA_SOURCES'][dataSource]['COMPRESSION'] if 'COMPRESSION' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['SINGLE_COUNT']) if 'SINGLE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                if 'DUPLICATE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource]:
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['DUPLICATE_COUNT']) if 'DUPLICATE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['AMBIGUOUS_MATCH_COUNT']) if 'AMBIGUOUS_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['POSSIBLE_MATCH_COUNT']) if 'POSSIBLE_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['POSSIBLY_RELATED_COUNT']) if 'POSSIBLY_RELATED_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
+                if self.settingsFileData['statisticLevel'] == 'RECORD':
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('DUPLICATE_RECORD_COUNT', 0)))
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('AMBIGUOUS_MATCH_RECORD_COUNT', 0)))
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('POSSIBLE_MATCH_RECORD_COUNT', 0)))
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('POSSIBLY_RELATED_RECORD_COUNT', 0)))
                 else:
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['DUPLICATE_ENTITY_COUNT']) if 'DUPLICATE_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['AMBIGUOUS_MATCH_ENTITY_COUNT']) if 'AMBIGUOUS_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
@@ -1605,7 +1606,7 @@ class G2CmdShell(cmd.Cmd):
         '\n\nSyntax:' \
         '\n\tcrossSourceSummary (with no parameters displays the overall stats)' \
         '\n\tcrossSourceSummary <dataSource1> (displays the cross matches for that data source only)' \
-        '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous Matches, 3 = Possible Matches, 4=Possibly Relateds\n'
+        '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships\n'
  
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
             printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
@@ -1636,11 +1637,13 @@ class G2CmdShell(cmd.Cmd):
                     row = []
                     row.append(colorize(dataSource1, self.colors['datasource']))
                     row.append(colorize(dataSource2, self.colors['datasource']))
-                    if 'MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]:
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_COUNT']) if 'MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_COUNT']) if 'AMBIGUOUS_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLE_MATCH_COUNT']) if 'POSSIBLE_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_COUNT']) if 'POSSIBLY_RELATED_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+
+                    cross_stat_level = 'RECORD'
+                    if cross_stat_level == 'RECORD':
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_RECORD_COUNT']) if 'MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_RECORD_COUNT']) if 'AMBIGUOUS_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLE_MATCH_RECORD_COUNT']) if 'POSSIBLE_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_RECORD_COUNT']) if 'POSSIBLY_RELATED_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
                     else:
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_ENTITY_COUNT']) if 'MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_ENTITY_COUNT']) if 'AMBIGUOUS_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
@@ -1648,6 +1651,7 @@ class G2CmdShell(cmd.Cmd):
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_ENTITY_COUNT']) if 'POSSIBLY_RELATED_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
 
                     tblRows.append(row)
+
             self.renderTable(tblTitle, tblColumns, tblRows)
 
         else:
