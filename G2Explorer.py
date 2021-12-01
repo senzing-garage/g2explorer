@@ -329,6 +329,9 @@ class G2CmdShell(cmd.Cmd):
             self.auditFile = None
             self.auditData = {}
 
+        #--default for supression data sources
+        self.settingsFileData['dataSourceSupression'] = self.settingsFileData.get('dataSourceSupression', True)
+
         #--history
         self.readlineAvail = True if 'readline' in sys.modules else False
         self.histDisable = hist_disable
@@ -554,6 +557,15 @@ class G2CmdShell(cmd.Cmd):
         else:
             printWithNewLines('Color scheme %s not valid!' % (arg), 'B')
             return
+
+    # -----------------------------
+    def do_toggle_dataSourceSuppression (self, arg):
+        if self.settingsFileData['dataSourceSupression']:
+            self.settingsFileData['dataSourceSupression'] = False 
+            printWithNewLines('dataSourceSupression is now OFF', 'B')
+        else:
+            self.settingsFileData['dataSourceSupression'] = True 
+            printWithNewLines('dataSourceSupression is now ON', 'B')
 
     # -----------------------------
     def do_versions (self,arg):
@@ -1501,7 +1513,7 @@ class G2CmdShell(cmd.Cmd):
                 while True:
                     if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
                         exportRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(exportRecords[0])
+                        returnCode = self.do_get(exportRecords[0], dataSourceFilter=[dataSource])
                     else:
                         exportRecords = sampleRecords[currentSample].split()[:2]
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
@@ -1514,7 +1526,7 @@ class G2CmdShell(cmd.Cmd):
                                     exportRecords = ambiguousList
                                 else:
                                     pass #--if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(exportRecords))
+                        returnCode = self.do_compare(','.join(exportRecords), dataSourceFilter=[dataSource])
                     if returnCode != 0:
                         printWithNewLines('The statistics loaded are out of date for this record!','E')
                     while True:
@@ -1685,7 +1697,7 @@ class G2CmdShell(cmd.Cmd):
 
                     if matchLevelCode in ('MATCH_SAMPLE'):
                         exportRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(exportRecords[0])
+                        returnCode = self.do_get(exportRecords[0], dataSourceFilter=[dataSource1, dataSource2])
                     else:
                         exportRecords = sampleRecords[currentSample].split()[:2]
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
@@ -1698,7 +1710,7 @@ class G2CmdShell(cmd.Cmd):
                                     exportRecords = ambiguousList
                                 else:
                                     pass #--if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(exportRecords))
+                        returnCode = self.do_compare(','.join(exportRecords), dataSourceFilter=[dataSource1, dataSource2])
 
                     if returnCode != 0:
                         printWithNewLines('The statistics loaded are out of date for this entity','E')
@@ -1965,7 +1977,7 @@ class G2CmdShell(cmd.Cmd):
             print('')
 
     # -----------------------------
-    def do_get(self,arg):
+    def do_get(self, arg, **kwargs):
 
         '\nDisplays a particular entity by entity_id or by data_source and record_id.' \
         '\n\nSyntax:' \
@@ -1983,6 +1995,12 @@ class G2CmdShell(cmd.Cmd):
 
         #--no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+
+        #--get possible data source list
+        if 'dataSourceFilter' in kwargs and self.settingsFileData['dataSourceSupression']:
+            dataSourceFilter = kwargs['dataSourceFilter']
+        else:
+            dataSourceFilter = None
 
         if 'DETAIL ' in arg.upper():
             showDetail = True
@@ -2056,27 +2074,40 @@ class G2CmdShell(cmd.Cmd):
         tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
 
         #--summarize by data source
+        additionalDataSources = False
         if reportType == 'Summary':
             dataSources = {}
             recordList = []
             for record in resolvedJson['RESOLVED_ENTITY']['RECORDS']:
                 if record['DATA_SOURCE'] not in dataSources:
                     dataSources[record['DATA_SOURCE']] = []
+                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                    additionalDataSources = True
+                    continue
                 dataSources[record['DATA_SOURCE']].append(record)
 
             #--summarize by data source
             for dataSource in sorted(dataSources):
-                recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
-                row = [recordData, entityData, otherData]
+                if dataSources[dataSource]:
+                    recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
+                    row = [recordData, entityData, otherData]
+                else:
+                    row = [dataSource, ' ** suppressed ** ', '']
                 recordList.append(row)
 
         #--display each record
         else:
             recordList = []
             for record in sorted(resolvedJson['RESOLVED_ENTITY']['RECORDS'], key = lambda k: (k['DATA_SOURCE'], k['RECORD_ID'])):
+                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                    additionalDataSources = True
+                    continue
                 recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
                 row = [recordData, entityData, otherData]
                 recordList.append(row)
+
+        #if additionalDataSources:
+        #    tblTitle += ' ' + colorize('** additionalDataSources **', 'blink'q)
 
         #--display if no relationships
         if relatedEntityCount == 0:
@@ -2229,7 +2260,7 @@ class G2CmdShell(cmd.Cmd):
         return None
 
     # -----------------------------
-    def do_compare(self,arg):
+    def do_compare(self, arg, **kwargs):
         '\nCompares a set of entities by placing them side by side in a columnar format.'\
         '\n\nSyntax:' \
         '\n\tcompare <entity_id1> <entity_id2>' \
@@ -2242,6 +2273,12 @@ class G2CmdShell(cmd.Cmd):
 
         #--no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+
+        #--get possible data source list
+        if 'dataSourceFilter' in kwargs and self.settingsFileData['dataSourceSupression']:
+            dataSourceFilter = kwargs['dataSourceFilter']
+        else:
+            dataSourceFilter = None
 
         fileName = None
         if type(arg) == str and 'TO' in arg.upper():
@@ -2316,11 +2353,22 @@ class G2CmdShell(cmd.Cmd):
             entityData['crossRelations'] = []
             entityData['otherRelations'] = []
  
+            additionalDataSources = False
             for record in jsonData['RESOLVED_ENTITY']['RECORDS']:
+
                 if record['DATA_SOURCE'] not in entityData['dataSources']:
-                    entityData['dataSources'][record['DATA_SOURCE']] = [record['RECORD_ID']]
+                    if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                        entityData['dataSources'][record['DATA_SOURCE']] = ['** suppressed **']
+                    else:
+                        entityData['dataSources'][record['DATA_SOURCE']] = [record['RECORD_ID']]
                 else:
-                    entityData['dataSources'][record['DATA_SOURCE']].append(record['RECORD_ID'])
+                    if dataSourceFilter and record['DATA_SOURCE'] in dataSourceFilter:
+                        entityData['dataSources'][record['DATA_SOURCE']].append(record['RECORD_ID'])
+
+                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                    additionalDataSources = True
+                    continue
+
                 if 'NAME_DATA' in record:
                     for item in record['NAME_DATA']:
                         if item not in entityData['nameData']:
