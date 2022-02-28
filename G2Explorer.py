@@ -973,7 +973,7 @@ class G2CmdShell(cmd.Cmd):
         else:
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagBits = self.computeApiFlags(getFlagList,apiVersion['VERSION'][0:1])
 
         #--gather all the record data
         ftypesUsed = []
@@ -1355,10 +1355,15 @@ class G2CmdShell(cmd.Cmd):
             maxNameCnt = 25
             maxAddrCnt = 25
 
+        #--compute the mask values
+        getFlagList = []
+        getFlagList.append('G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES')
+        getFlagBits = self.computeApiFlags(getFlagList,apiVersion['VERSION'][0:1])
+
         #--get the entity
         try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), g2Engine.G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES, response)
+            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), getFlagBits, response)
             response = response.decode() if response else ''
         except G2Exception.G2Exception as err:
             print(str(err))
@@ -1807,7 +1812,7 @@ class G2CmdShell(cmd.Cmd):
                 searchFlagList.append('G2_SEARCH_INCLUDE_STATS')
             else:
                 searchFlagList.append('G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS')
-            searchFlagBits = self.computeApiFlags(searchFlagList)
+            searchFlagBits = self.computeApiFlags(searchFlagList,apiVersion['VERSION'][0:1])
 
             try:
                 response = bytearray()
@@ -2006,7 +2011,7 @@ class G2CmdShell(cmd.Cmd):
         else:
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagBits = self.computeApiFlags(getFlagList,apiVersion['VERSION'][0:1])
 
         if len(arg.split()) == 1:
             apiCall = f'getEntityByEntityIDV2({arg}, {getFlagBits}, response)'
@@ -2198,7 +2203,7 @@ class G2CmdShell(cmd.Cmd):
             getFlagList.append('G2_ENTITY_SHOW_FEATURES_EXPRESSED')
             getFlagList.append('G2_ENTITY_SHOW_FEATURES_STATS')
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagBits = self.computeApiFlags(getFlagList,apiVersion['VERSION'][0:1])
         try:
             response = bytearray()
             retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
@@ -2276,7 +2281,7 @@ class G2CmdShell(cmd.Cmd):
         else:
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagBits = self.computeApiFlags(getFlagList,apiVersion['VERSION'][0:1])
 
         compareList = []
         for entityId in entityList:
@@ -2712,7 +2717,7 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def whyEntity(self, entityList):
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagBits = self.computeApiFlags(whyFlagList,apiVersion['VERSION'][0:1])
         try:
             response = bytearray()
             retcode = g2Engine.whyEntityByEntityIDV2(int(entityList[0]), whyFlagBits, response)
@@ -2750,7 +2755,7 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def whyRecords(self, entityList):
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagBits = self.computeApiFlags(whyFlagList,apiVersion['VERSION'][0:1])
         try:
             response = bytearray()
             retcode = g2Engine.whyRecordsV2(entityList[0], entityList[1], entityList[2], entityList[3], whyFlagBits, response)
@@ -2815,7 +2820,7 @@ class G2CmdShell(cmd.Cmd):
             return None
 
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagBits = self.computeApiFlags(whyFlagList,apiVersion['VERSION'][0:1])
         try:
             response = bytearray()
             retcode = g2Engine.whyEntitiesV2(int(entityList[0]), int(entityList[1]), whyFlagBits, response)
@@ -2899,7 +2904,7 @@ class G2CmdShell(cmd.Cmd):
             whyFlagList.append('G2_ENTITY_INCLUDE_RECORD_JSON_DATA')
         else:
             whyFlagList.append('G2_WHY_ENTITY_DEFAULT_FLAGS')
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagBits = self.computeApiFlags(whyFlagList,apiVersion['VERSION'][0:1])
 
         masterFtypeList = []
         entityData = {}
@@ -2968,7 +2973,7 @@ class G2CmdShell(cmd.Cmd):
                 getFlagList.append('G2_ENTITY_BRIEF_DEFAULT_FLAGS')
             else:
                 getFlagList.append('G2_ENTITY_BRIEF_FORMAT')
-            getFlagBits = self.computeApiFlags(getFlagList)
+            getFlagBits = self.computeApiFlags(getFlagList,apiVersion['VERSION'][0:1])
             try:
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
@@ -3000,7 +3005,7 @@ class G2CmdShell(cmd.Cmd):
             else:
                 searchFlagList.append('G2_ENTITY_INCLUDE_NO_FEATURES')
                 searchFlagList.append('G2_ENTITY_INCLUDE_NO_RELATIONS')
-            searchFlagBits = self.computeApiFlags(searchFlagList)
+            searchFlagBits = self.computeApiFlags(searchFlagList,apiVersion['VERSION'][0:1])
 
             try:
                 response = bytearray()
@@ -3411,20 +3416,22 @@ class G2CmdShell(cmd.Cmd):
             print('cannot write to %s - %s' % (fileName, err))
             return
 
-        getFlags = 0
+        #--compute the mask values
+        getFlagList = []
         if apiVersion['VERSION'][0:1] > '1':
-            #getFlags = g2Engine.G2_ENTITY_DEFAULT_FLAGS
-            getFlags = getFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_DATA
-            getFlags = getFlags | g2Engine.G2_ENTITY_INCLUDE_RECORD_JSON_DATA
+            #getFlagList.append('G2_ENTITY_DEFAULT_FLAGS')
+            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
+            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_JSON_DATA')
         else:
-            getFlags = getFlags | g2Engine.G2_ENTITY_INCLUDE_ALL_FEATURES
+            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
+        getFlagBits = self.computeApiFlags(getFlagList,apiVersion['VERSION'][0:1])
 
         recordCount = 0
         for entityId in entityList:
             apiCall = 'getEntityByEntityIDV2(%s)' % arg
             try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlags, response)
+                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
             except G2Exception.G2Exception as err:
                 printWithNewLines(str(err), 'B')
@@ -3502,7 +3509,7 @@ class G2CmdShell(cmd.Cmd):
         return False
 
     # -----------------------------
-    def computeApiFlags(self, flagList):
+    def computeApiFlags(self, flagList, apiVersion):
             flagBits = 0
             for flagName in flagList:
                 flagBits = flagBits | getattr(g2Engine, flagName)
