@@ -28,7 +28,6 @@ except:
 #--senzing python classes
 try:
     import G2Paths
-    from G2Database import G2Database
     from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2Exception, G2IniParams, G2Product
 except:
     print('\nPlease export PYTHONPATH=<path to senzing python directory>\n')
@@ -628,13 +627,13 @@ class G2CmdShell(cmd.Cmd):
     def do_quickLook (self,arg):
         '\nDisplays current data source stats without a snapshot'
 
-        g2_diagnostic_module = G2Diagnostic.G2Diagnostic()
+        g2_diagnostic_module = G2Diagnostic()
         g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
         try:
             response = bytearray()
             g2_diagnostic_module.getDataSourceCounts(response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(err)
         jsonResponse = json.loads(response)
 
@@ -986,7 +985,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 printWithNewLines(str(err), 'B')
                 return -1 if calledDirect else 0
 
@@ -1365,7 +1364,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.getEntityByEntityIDV2(int(entityID), getFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return sampleRecord
         try: jsonData = json.loads(response)
@@ -1818,7 +1817,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.searchByAttributesV2(json.dumps(searchJson), searchFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print(json.dumps(searchJson, indent=4))
                 print(str(err))
                 return
@@ -2019,7 +2018,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(arg), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 printWithNewLines(str(err), 'B')
                 return -1 if calledDirect else 0
 
@@ -2029,7 +2028,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByRecordIDV2(arg.split()[0], arg.split()[1], getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 printWithNewLines(str(err), 'B')
                 return -1 if calledDirect else 0
         else:
@@ -2208,7 +2207,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return None
         jsonData2 = json.loads(response)
@@ -2289,7 +2288,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 printWithNewLines(str(err), 'B')
                 return -1 if calledDirect else 0
             else:
@@ -2722,7 +2721,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.whyEntityByEntityIDV2(int(entityList[0]), whyFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             printWithNewLines(str(err), 'B')
             return None
         if len(response) == 0:
@@ -2760,7 +2759,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.whyRecordsV2(entityList[0], entityList[1], entityList[2], entityList[3], whyFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             printWithNewLines(str(err), 'B')
             return None
         if len(response) == 0:
@@ -2825,7 +2824,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.whyEntitiesV2(int(entityList[0]), int(entityList[1]), whyFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             printWithNewLines(str(err), 'B')
             return None
         if len(response) == 0:
@@ -2914,7 +2913,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.whyEntityByEntityIDV2(int(entityId), whyFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 printWithNewLines(str(err), 'B')
                 return None
             jsonData = json.loads(response)
@@ -2978,7 +2977,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print(str(err))
                 return
             jsonData2 = json.loads(response)
@@ -3011,7 +3010,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.searchByAttributesV2(json.dumps(searchJson), searchFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print(json.dumps(searchJson, indent=4))
                 print(str(err))
                 return
@@ -3274,7 +3273,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_1', json.dumps(record1json))
             retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_2', json.dumps(record2json))
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return
 
@@ -3284,7 +3283,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_1')
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_2')
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return
 
@@ -3433,7 +3432,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 printWithNewLines(str(err), 'B')
                 return -1 if calledDirect else 0
             else:
@@ -3731,26 +3730,26 @@ if __name__ == '__main__':
 
     #--try to initialize the g2engine
     try:
-        g2Engine = G2Engine.G2Engine()
-        iniParamCreator = G2IniParams.G2IniParams()
+        g2Engine = G2Engine()
+        iniParamCreator = G2IniParams()
         iniParams = iniParamCreator.getJsonINIParams(iniFileName)
         g2Engine.init('G2Snapshot', iniParams, False)
-    except G2Exception.G2Exception as err:
+    except G2Exception as err:
         print('\n%s\n' % str(err))
         sys.exit(1)
 
     #--get the version information
     try:
-        g2Product = G2Product.G2Product()
+        g2Product = G2Product()
         apiVersion = json.loads(g2Product.version())
-    except G2Exception.G2Exception as err:
+    except G2Exception as err:
         print(err)
         sys.exit(1)
     g2Product.destroy()
 
     #--get needed config data
     try:
-        g2ConfigMgr = G2ConfigMgr.G2ConfigMgr()
+        g2ConfigMgr = G2ConfigMgr()
         g2ConfigMgr.init('pyG2ConfigMgr', iniParams, False)
         defaultConfigID = bytearray()
         g2ConfigMgr.getDefaultConfigID(defaultConfigID)
