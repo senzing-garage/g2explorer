@@ -41,7 +41,7 @@ try: #  supports both ptable and prettytable builds of prettytable (only prettyt
 except:
     pretty_table_style_available = False
 
-# Import from Senzing.
+# Import from Senzing
 try:
     import G2Paths
     from G2Database import G2Database
@@ -318,6 +318,12 @@ class G2CmdShell(cmd.Cmd):
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_FTYPE']:
             self.ftypeCodeLookup[cfgRecord['FTYPE_CODE']] = cfgRecord 
 
+        self.ftypeAttrLookup = {}
+        for cfgRecord in self.cfgData['G2_CONFIG']['CFG_ATTR']:
+            if cfgRecord['FTYPE_CODE'] not in self.ftypeAttrLookup:
+                self.ftypeAttrLookup[cfgRecord['FTYPE_CODE']] = {}
+            self.ftypeAttrLookup[cfgRecord['FTYPE_CODE']][cfgRecord['FELEM_CODE']] = cfgRecord 
+
         self.cfuncLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_CFUNC']:
             self.cfuncLookup[cfgRecord['CFUNC_ID']] = cfgRecord 
@@ -350,7 +356,7 @@ class G2CmdShell(cmd.Cmd):
                 featureSequence += 1
 
         #--misc
-        self.sqlCommitSize = 1000
+        self.dsrc_record_sep = '~|~'
         self.__hidden_methods = ('do_shell')
         self.doDebug = False
         self.searchMatchLevels = {1: 'Match', 2: 'Possible Match', 3: 'Possibly Related', 4: 'Name Only'}
@@ -2115,6 +2121,12 @@ class G2CmdShell(cmd.Cmd):
         else: 
             showDetail = False
 
+        if 'FEATURES ' in arg.upper():
+            showFeatures = True
+            arg = arg.upper().replace('FEATURES ','')
+        else: 
+            showFeatures = False
+
         if len(arg.split()) == 2 and arg.split()[0].upper() == 'SEARCH':
             lastToken = arg.split()[1]
             if not lastToken.isdigit() or lastToken == '0' or int(lastToken) > len(self.lastSearchResult):
@@ -2172,94 +2184,106 @@ class G2CmdShell(cmd.Cmd):
         relatedEntityCount = len(resolvedJson['RELATED_ENTITIES']) if 'RELATED_ENTITIES' in resolvedJson else 0
         entityID = str(resolvedJson['RESOLVED_ENTITY']['ENTITY_ID'])
         entityName = resolvedJson['RESOLVED_ENTITY']['ENTITY_NAME']
-        coloredEntityID = colorize(entityID, self.colors['entityid'])
+        #coloredEntityID = colorize(entityID, self.colors['entityid'])
 
-        reportType = 'Detail' if showDetail else 'Summary'
-        tblTitle = f'Entity {reportType} for: {coloredEntityID} - {entityName}'
-        tblColumns = []
-        tblColumns.append({'name': 'Record ID', 'width': 50, 'align': 'left'})
-        tblColumns.append({'name': 'Entity Data', 'width': 100, 'align': 'left'})
-        tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
-
-        #--summarize by data source
-        additionalDataSources = False
-        if reportType == 'Summary':
-            dataSources = {}
-            recordList = []
-            for record in resolvedJson['RESOLVED_ENTITY']['RECORDS']:
-                if record['DATA_SOURCE'] not in dataSources:
-                    dataSources[record['DATA_SOURCE']] = []
-                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
-                    additionalDataSources = True
-                    continue
-                dataSources[record['DATA_SOURCE']].append(record)
+        if showFeatures:
+            tblColumns = []
+            tblColumns.append({'name': 'Feature', 'width': 50, 'align': 'left'})
+            tblColumns.append({'name': 'Description', 'width': 100, 'align': 'left'})
+            tblColumns.append({'name': 'Elements', 'width': 100, 'align': 'left'})
+            reportType = 'features'
+            tblTitle = colorize(f'Entity {reportType} for: {entityID} - {entityName}', self.colors['entityid'])
+            tblRows = self.getFeatures(entityID)
+            self.renderTable(tblTitle, tblColumns, tblRows, titleColor=self.colors['entityTitle'])
+            return 0
+        else:
+            tblColumns = []
+            tblColumns.append({'name': 'Record ID', 'width': 50, 'align': 'left'})
+            tblColumns.append({'name': 'Entity Data', 'width': 100, 'align': 'left'})
+            tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
+            reportType = 'detail' if showDetail else 'summary'
+            tblTitle = colorize(f'Entity {reportType} for: {entityID} - {entityName}', self.colors['entityid'])
 
             #--summarize by data source
-            for dataSource in sorted(dataSources):
-                if dataSources[dataSource]:
-                    recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
+            additionalDataSources = False
+            if reportType == 'summary':
+                dataSources = {}
+                recordList = []
+                for record in resolvedJson['RESOLVED_ENTITY']['RECORDS']:
+                    if record['DATA_SOURCE'] not in dataSources:
+                        dataSources[record['DATA_SOURCE']] = []
+                    if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                        additionalDataSources = True
+                        continue
+                    dataSources[record['DATA_SOURCE']].append(record)
+
+                #--summarize by data source
+                for dataSource in sorted(dataSources):
+                    if dataSources[dataSource]:
+                        recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
+                        row = [recordData, entityData, otherData]
+                    else:
+                        row = [dataSource, ' ** suppressed ** ', '']
+                    recordList.append(row)
+
+            #--display each record
+            else:
+                recordList = []
+                for record in sorted(resolvedJson['RESOLVED_ENTITY']['RECORDS'], key = lambda k: (k['DATA_SOURCE'], k['RECORD_ID'])):
+                    if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                        additionalDataSources = True
+                        continue
+                    recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
                     row = [recordData, entityData, otherData]
-                else:
-                    row = [dataSource, ' ** suppressed ** ', '']
-                recordList.append(row)
+                    recordList.append(row)
 
-        #--display each record
-        else:
-            recordList = []
-            for record in sorted(resolvedJson['RESOLVED_ENTITY']['RECORDS'], key = lambda k: (k['DATA_SOURCE'], k['RECORD_ID'])):
-                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
-                    additionalDataSources = True
-                    continue
-                recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
-                row = [recordData, entityData, otherData]
-                recordList.append(row)
+            #if additionalDataSources:
+            #    tblTitle += ' ' + colorize('** additionalDataSources **', 'blink'q)
 
-        #if additionalDataSources:
-        #    tblTitle += ' ' + colorize('** additionalDataSources **', 'blink'q)
+            #--display if no relationships
+            if relatedEntityCount == 0:
+                self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'])
+                return 0
 
-        #--display if no relationships
-        if relatedEntityCount == 0:
-            self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'])
-            return 0
+            #--otherwise begin the report and add the relationships
+            self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'], displayFlag='begin')
 
-        #--otherwise begin the report and add the relationships
-        self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'], displayFlag='begin')
+            relationships = []
+            for relatedEntity in resolvedJson['RELATED_ENTITIES']:
+                relationship = {}
+                relationship['MATCH_LEVEL'] = relatedEntity['MATCH_LEVEL']
+                relationship['MATCH_KEY'] = relatedEntity['MATCH_KEY']
+                relationship['ERRULE_CODE'] = relatedEntity['ERRULE_CODE']
+                relationship['ENTITY_ID'] = relatedEntity['ENTITY_ID']
+                relationship['ENTITY_NAME'] = relatedEntity['ENTITY_NAME']
+                relationship['DATA_SOURCES'] = []
+                for dataSource in relatedEntity['RECORD_SUMMARY']:
+                    relationship['DATA_SOURCES'].append('%s (%s)' %(colorize(dataSource['DATA_SOURCE'], self.colors['datasource']), dataSource['RECORD_COUNT']))
+                relationships.append(relationship)
 
-        relationships = []
-        for relatedEntity in resolvedJson['RELATED_ENTITIES']:
-            relationship = {}
-            relationship['MATCH_LEVEL'] = relatedEntity['MATCH_LEVEL']
-            relationship['MATCH_KEY'] = relatedEntity['MATCH_KEY']
-            relationship['ERRULE_CODE'] = relatedEntity['ERRULE_CODE']
-            relationship['ENTITY_ID'] = relatedEntity['ENTITY_ID']
-            relationship['ENTITY_NAME'] = relatedEntity['ENTITY_NAME']
-            relationship['DATA_SOURCES'] = []
-            for dataSource in relatedEntity['RECORD_SUMMARY']:
-                relationship['DATA_SOURCES'].append('%s (%s)' %(colorize(dataSource['DATA_SOURCE'], self.colors['datasource']), dataSource['RECORD_COUNT']))
-            relationships.append(relationship)
+            #tblTitle = f'{relatedEntityCount} related entities'
+            tblTitle = colorize(f'Entities related to: {entityID} - {entityName}', self.colors['entityid'])
+            tblColumns = []
+            tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'left'})
+            tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
+            tblColumns.append({'name': 'Data Sources', 'width': 75, 'align': 'left'})
+            tblColumns.append({'name': 'Match Level', 'width': 25, 'align': 'left'})
+            tblColumns.append({'name': 'Match Key', 'width': 50, 'align': 'left'})
+            relatedRecordList = []
+            for relationship in sorted(relationships, key = lambda k: k['MATCH_LEVEL']):
+                row = []
+                row.append(colorize(str(relationship['ENTITY_ID']), self.colors['entityid']))
+                row.append(relationship['ENTITY_NAME'])
+                row.append('\n'.join(sorted(relationship['DATA_SOURCES'])))
+                row.append(self.relatedMatchLevels[relationship['MATCH_LEVEL']])
+                matchData = {}
+                matchData['matchKey'] = relationship['MATCH_KEY']
+                matchData['ruleCode'] = self.getRuleDesc(relationship['ERRULE_CODE'])
+                row.append(formatMatchData(matchData, self.colors))
+                relatedRecordList.append(row)
+                    
+            self.renderTable(tblTitle, tblColumns, relatedRecordList, titleColor=self.colors['entityTitle'], titleJustify='l', displayFlag='end')
 
-        #tblTitle = f'{relatedEntityCount} related entities'
-        tblTitle = f'Entities related to: {coloredEntityID} - {entityName}'
-        tblColumns = []
-        tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'left'})
-        tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
-        tblColumns.append({'name': 'Data Sources', 'width': 75, 'align': 'left'})
-        tblColumns.append({'name': 'Match Level', 'width': 25, 'align': 'left'})
-        tblColumns.append({'name': 'Match Key', 'width': 50, 'align': 'left'})
-        relatedRecordList = []
-        for relationship in sorted(relationships, key = lambda k: k['MATCH_LEVEL']):
-            row = []
-            row.append(colorize(str(relationship['ENTITY_ID']), self.colors['entityid']))
-            row.append(relationship['ENTITY_NAME'])
-            row.append('\n'.join(sorted(relationship['DATA_SOURCES'])))
-            row.append(self.relatedMatchLevels[relationship['MATCH_LEVEL']])
-            matchData = {}
-            matchData['matchKey'] = relationship['MATCH_KEY']
-            matchData['ruleCode'] = self.getRuleDesc(relationship['ERRULE_CODE'])
-            row.append(formatMatchData(matchData, self.colors))
-            relatedRecordList.append(row)
-                
-        self.renderTable(tblTitle, tblColumns, relatedRecordList, titleColor=self.colors['entityTitle'], titleJustify='l', displayFlag='end')
         return 0
 
     # -----------------------------
@@ -2279,14 +2303,14 @@ class G2CmdShell(cmd.Cmd):
             dataSource = colorize(record['DATA_SOURCE'], self.colors['datasource']) 
 
             recordIdData = record['RECORD_ID']
-            if reportType == 'Detail':
+            if reportType == 'detail':
                 if record['MATCH_KEY']:
                     matchData = {}
                     matchData['matchKey'] = record['MATCH_KEY']
                     matchData['ruleCode'] = self.getRuleDesc(record['ERRULE_CODE'])
                     recordIdData += '\n' + formatMatchData(matchData, self.colors)
-                #if record['ERRULE_CODE']:
-                #    recordIdData += '\n  ' + colorize(self.getRuleDesc(record['ERRULE_CODE']), 'dim')
+                if record['ERRULE_CODE']:
+                    recordIdData += '\n  ' + colorize(self.getRuleDesc(record['ERRULE_CODE']), 'dim')
             recordIdList.append(recordIdData)
 
             for item in record['NAME_DATA']:
@@ -2303,17 +2327,17 @@ class G2CmdShell(cmd.Cmd):
             for item in record['IDENTIFIER_DATA']:
                 identifierList.append(colorizeAttribute(item, self.colors['highlight1']))
             for item in sorted(record['OTHER_DATA']):
-                if not self.isInternalAttribute(item) or reportType == 'Detail':
+                if not self.isInternalAttribute(item) or reportType == 'detail':
                     otherList.append(colorizeAttribute(item, self.colors['highlight1']))
 
         recordDataList = [dataSource] + sorted(recordIdList)
         entityDataList = list(set(primaryNameList)) + list(set(otherNameList)) + sorted(set(attributeList)) + sorted(set(identifierList)) + list(set(addressList)) + list(set(phoneList))
         otherDataList = sorted(set(otherList))
 
-        if reportType == 'Detail':
+        if reportType == 'detail':
             columnHeightLimit = 1000
         else:
-            columnHeightLimit = 50
+            columnHeightLimit = 20
 
         recordData = '\n'.join(recordDataList[:columnHeightLimit])
         if len(recordDataList) > columnHeightLimit:
@@ -2328,6 +2352,78 @@ class G2CmdShell(cmd.Cmd):
              otherData += '\n+%s more ' % str(len(otherDataList) - columnHeightLimit)
 
         return recordData, entityData, otherData
+
+    # -----------------------------
+    def getFeatures(self, entityID):
+
+        getFlagList = []
+        getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
+        getFlagBits = self.computeApiFlags(getFlagList)
+
+        apiCall = f'getEntityByEntityIDV2({entityID}, {getFlagBits}, response)' 
+        try: 
+            response = bytearray()
+            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), getFlagBits, response)
+            response = response.decode() if response else ''
+        except G2Exception as err:
+            printWithNewLines(str(err), 'B')
+            return -1 if calledDirect else 0
+
+        if debugOutput:
+            showApiDebug('get', apiCall, getFlagList, json.loads(response) if response else '{}')
+
+        if len(response) == 0:
+            printWithNewLines('0 records found %s' % response, 'B')
+            return -1 if calledDirect else 0
+        jsonData = json.loads(response)
+
+        g2_diagnostic_module = G2Diagnostic.G2Diagnostic()
+        if apiVersion['VERSION'][0:1] == '2':
+            g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
+        else: #--eventually deprecate the above
+            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
+
+        #--get the features in order
+        orderedFeatureList = []
+        for ftypeId in self.featureSequence: #sorted(featureArray, key=lambda k: self.featureSequence[k]):
+            ftypeCode = self.ftypeLookup[ftypeId]['FTYPE_CODE']
+            for distinctFeatureData in jsonData['RESOLVED_ENTITY']['FEATURES'].get(ftypeCode,[]):
+                for featureData in distinctFeatureData['FEAT_DESC_VALUES']:
+                    usageType = featureData.get('USAGE_TYPE')
+                    orderedFeatureList.append({'ftypeCode': ftypeCode, 
+                                               'usageType': distinctFeatureData.get('USAGE_TYPE'), 
+                                               'featureDesc': featureData.get('FEAT_DESC'),
+                                               'libFeatId': featureData['LIB_FEAT_ID']})
+        tblRows = []
+        for libFeatData in orderedFeatureList:
+            ftypeCode = libFeatData['ftypeCode']
+            usageType = libFeatData['usageType']
+            libFeatId = libFeatData['libFeatId']
+            featureDesc = libFeatData['featureDesc']
+
+            try: 
+                response = bytearray() 
+                g2_diagnostic_module.getFeature(libFeatId, response)
+                response = response.decode() if response else ''
+            except G2Exception as err:
+                print(err)
+            jsonData = json.loads(response)
+
+            ftypeDisplay = ftypeCode + (' (' + usageType + ')' if usageType else '')
+            ftypeDisplay += '\n  ' + colorize(f'id: {libFeatId}', 'dim')
+
+            #--standardize the order of the attributes
+            for i in range(len(jsonData['ELEMENTS'])):
+                attrRecord = self.ftypeAttrLookup[ftypeCode].get(jsonData['ELEMENTS'][i]['FELEM_CODE'])
+                attrId = attrRecord['ATTR_ID'] if attrRecord else 9999999
+                jsonData['ELEMENTS'][i]['ATTR_ID'] = attrId
+
+            felemDisplayList = []
+            for elementData in sorted(sorted(jsonData['ELEMENTS'], key=lambda k: (k['FELEM_CODE'])), key=lambda k: (k['ATTR_ID'])):
+                felemDisplayList.append(colorize(elementData['FELEM_CODE'], self.colors['highlight1']) + ': ' +  elementData['FELEM_VALUE'])
+
+            tblRows.append([ftypeDisplay, featureDesc, '\n'.join(felemDisplayList)])
+        return tblRows
 
     # -----------------------------
     def getAmbiguousEntitySet(self, entityId):
@@ -2649,7 +2745,7 @@ class G2CmdShell(cmd.Cmd):
         '\nDisplays an entity tree from a particular entity\'s point of view' \
         '\n\nSyntax:' \
         '\n\ttree <entity_id> degree <n>'
-        if not argCheck('do_export', arg, self.do_tree.__doc__):
+        if not argCheck('do_tree', arg, self.do_tree.__doc__):
             return
 
         entityId = None
@@ -2693,7 +2789,7 @@ class G2CmdShell(cmd.Cmd):
         nodes = {}
         missing_entities = []
 
-        current_parent_list = [{'NEXT_RELATED_ENTITY_I': 0, 'RELATED_ENTITY_LIST': [entityId]}]
+        current_parent_list = [{'NEXT_RELATED_ENTITY_I': 0, 'RELATED_ENTITY_LIST': [entityId], 'PRIOR_ENTITY_LIST': [entityId]}]
         while current_parent_list:
 
             #--decrement degree if done with this list
@@ -2707,8 +2803,8 @@ class G2CmdShell(cmd.Cmd):
             current_parent_list[len(current_parent_list)-1]['NEXT_RELATED_ENTITY_I'] += 1
             
             #--bypass if already built
-            if entity_id in nodes:
-                continue
+            #if entity_id in nodes:
+            #    continue
 
             nodes[entity_id] = {}
             nodes[entity_id]['RELATED_ENTITY_LIST'] = []
@@ -2729,7 +2825,11 @@ class G2CmdShell(cmd.Cmd):
 
             #--categorize relationships
             for relationship in entity_data.get('RELATED_ENTITIES', []):
-                related_id = relationship['ENTITY_ID'] 
+                related_id = relationship['ENTITY_ID']
+
+                #--bypass nodes already rendered in this tree
+                if related_id in current_parent_list[len(current_parent_list)-1]['PRIOR_ENTITY_LIST']:
+                    continue
 
                 nodes[entity_id]['RELATED_ENTITY_COUNT'] += 1
                 nodes[entity_id]['RELATED_ENTITY_LIST'].append(related_id)
@@ -2752,7 +2852,15 @@ class G2CmdShell(cmd.Cmd):
 
             #--start a new parent if any children
             if nodes[entity_id]['RELATED_ENTITY_LIST']:
-                current_parent_list.append({'NEXT_RELATED_ENTITY_I': 0, 'RELATED_ENTITY_LIST': nodes[entity_id]['RELATED_ENTITY_LIST']})
+
+                #--gather all prior level nodes so don't render twice
+                next_prior_entity_list = []
+                for parent_data in current_parent_list:
+                    next_prior_entity_list += parent_data['RELATED_ENTITY_LIST']
+
+                current_parent_list.append({'NEXT_RELATED_ENTITY_I': 0, 
+                                            'RELATED_ENTITY_LIST': nodes[entity_id]['RELATED_ENTITY_LIST'],
+                                            'PRIOR_ENTITY_LIST': next_prior_entity_list})
 
         #print('----\n', json.dumps(nodes, indent=4), '\n----')
 
@@ -2762,7 +2870,6 @@ class G2CmdShell(cmd.Cmd):
         root_node = Node(entityId)
         root_node.node_desc = self.entityNodeDesc(nodes, entityId)
         tree_node_list[entityId] = root_node
-
 
         current_degree_list = [{'node': root_node, 'entity_id': entityId, 'next_child': 0}]
         while current_degree_list:
@@ -2783,11 +2890,15 @@ class G2CmdShell(cmd.Cmd):
                     if nodes[entity_id][count_key] > 0:
                         class_node = Node(f'{nodes[entity_id]}-{class_name}')
                         colorized_class_name = colorize(class_name, self.colors['highlight1'])
-                        class_node.node_desc = f'{colorized_class_name} ({nodes[entity_id][count_key]})'
+                        #class_node.node_desc = f'{colorized_class_name} ({nodes[entity_id][count_key]})'
+                        class_node.node_desc = f'{class_name} ({nodes[entity_id][count_key]})'
+
+                        category_color = self.colors['highlight1'] if class_name == 'DISCLOSED' else self.colors['good']
 
                         for category in sorted(nodes[entity_id][category_key].keys()):
                             category_node = Node(f'{nodes[entity_id]}-{category}')
-                            colorized_category = colorize('+', self.colors['highlight1'] + ',dim').join(colorize(item, self.colors['highlight1']) for item in category.split('+'))
+                            #colorized_category = colorize('+', self.colors['highlight1'] + ',dim').join(colorize(item, self.colors['highlight1']) for item in category.split('+'))
+                            colorized_category = colorize('+'.join(category.split('+')), category_color)
                             category_node.node_desc = f'{colorized_category} ({len(nodes[entity_id][category_key][category])})'
                             cnt = 0
                             for related_id in sorted(nodes[entity_id][category_key][category]):
@@ -2816,9 +2927,10 @@ class G2CmdShell(cmd.Cmd):
             related_id = current_degree_list[-1]['children'][current_degree_list[-1]['next_child']]
             current_degree_list[-1]['next_child'] += 1
 
-            #print('\t' * len(current_degree_list), 'related:', related_id)
+            #print('\t' * len(current_degree_list), 'related:', related_id, current_degree_list[-1]['prior_level_nodes'])
+
+            #--start a new list of children if any
             if len(current_degree_list) < buildOutDegree and nodes[related_id]['RELATED_ENTITY_COUNT'] > 0:
-                #print('\trelated:', related_id)
                 current_degree_list.append({'node': tree_node_list[related_id], 'entity_id': related_id, 'next_child': 0})
 
         print()
@@ -2940,36 +3052,36 @@ class G2CmdShell(cmd.Cmd):
         if len(entityList) == 1:
             whyType = 'whyEntity'
             tblTitle = 'Why for entity ID %s' % entityList[0]
-            firstRowTitle = 'Internal ID'
+            firstRowTitle = 'INTERNAL_ID'
             entityData = self.whyEntity(entityList)
 
         elif len(entityList) == 2 and not oldWhyNot: #--whyEntities() only available in 2.0
             whyType = 'whyNot1'
             tblTitle = 'Why NOT for listed entities'
-            firstRowTitle = 'Entity ID'
+            firstRowTitle = 'ENTITY_ID'
             entityData = self.whyNot2(entityList)
 
         elif len(entityList) == 4 and entityList[0].upper() in self.dsrcCodeLookup:
             whyType = 'whyRecords'
             tblTitle = 'Why records - %s: %s vs %s: %s' % (entityList[0].upper(), entityList[1], entityList[2].upper(), entityList[3])
-            firstRowTitle = 'Internal ID'
+            firstRowTitle = 'INTERNAL_ID'
             entityData = self.whyRecords(entityList)
 
         else:
             whyType = 'whyNot2'
             tblTitle = 'Why NOT for listed entities'
-            firstRowTitle = 'Entity ID'
+            firstRowTitle = 'ENTITY_ID'
             entityData = self.whyNotMany(entityList)
 
         if not entityData:
             printWithNewLines('No records found!', 'B')
             return -1 if calledDirect else 0
 
-        tblColumns = [{'name': firstRowTitle, 'width': 50, 'align': 'left'}]
+        tblColumns = [{'name': colorize(firstRowTitle, self.colors['rowTitle']), 'width': 50, 'align': 'left'}]
         tblRows = []
 
-        dataSourceRow = ['DATA SOURCES']
-        matchKeyRow = ['WHY RESULT']
+        dataSourceRow = ['DATA_SOURCES']
+        matchKeyRow = ['WHY_RESULT']
         crossRelationsRow = ['RELATIONSHIPS']
         featureArray = {}
         for entityId in sorted(entityData.keys()):
@@ -3003,80 +3115,16 @@ class G2CmdShell(cmd.Cmd):
                 matchKeyRow.append('\n'.join(tempList))
 
             #--prepare the feature rows
+            whyKey = entityData[entityId]['whyKey']
             for libFeatId in entityData[entityId]['features']:
                 featureData = entityData[entityId]['features'][libFeatId]
-                #print('~' * 10)
-                #print(entityId)
-                #print(libFeatId)
-                #print(featureData)
-                #if 'ftypeId' not in featureData:
-                #    featureData['ftypeId'] = -1
-                #    featureData['featDesc'] = '%s' % libFeatId
-
                 ftypeId = featureData['ftypeId']
-                ftypeCode = featureData['ftypeCode']
+                formattedFeature = self.whyFormatFeature(featureData, whyKey)
                 if ftypeId not in featureArray:
                     featureArray[ftypeId] = {}
                 if entityId not in featureArray[ftypeId]:
                     featureArray[ftypeId][entityId] = []
-
-                featDesc = featureData['featDesc'].strip()
-                dimmit = False
-                featDesc += ' ['
-                if featureData['candidateCapReached'] == 'Y':
-                    featDesc += '~'
-                    dimmit = True
-                if featureData['scoringCapReached'] == 'Y':
-                    featDesc += '!'
-                    dimmit = True
-                if featureData['scoringWasSuppressed'] == 'Y':
-                    featDesc += '#'
-                    dimmit = False if whyType == 'whyEntity' else True
-                featDesc += str(featureData['entityCount']) + ']'
-
-                sortOrder = 3
-                if 'wasScored' in featureData:
-                    if featureData['matchLevel'] in ('SAME', 'CLOSE'):
-                        sortOrder = 1
-                        featColor = self.colors['good'] 
-                    else:
-                        sortOrder = 2
-                        if not entityData[entityId]['whyKey']:
-                            featColor = self.colors['bad']
-                        elif type(entityData[entityId]['whyKey']) == dict and ('-' + ftypeCode) not in entityData[entityId]['whyKey']['matchKey']:
-                            featColor = self.colors['caution']
-                        elif type(entityData[entityId]['whyKey']) == list and ('-' + ftypeCode) not in entityData[entityId]['whyKey'][0]['matchKey']:
-                            featColor = self.colors['caution']
-                        else:
-                            featColor = self.colors['bad']
-                    if dimmit: 
-                        featColor += ',dim'
-                    featDesc = colorize(featDesc, featColor)
-
-                    #--note: addresses may score same tho not exact!
-                    if featureData['matchLevel'] != 'SAME' or featureData['matchedFeatDesc'] != featureData['featDesc']:  
-                        featDesc += '\n  '
-                        featDesc += colorize('%s (%s)' % (featureData['matchedFeatDesc'].strip(), featureData['matchScoreDisplay']), featColor+',italics')
-
-                elif 'matchScore' in featureData: #--must be same and likley a candidate builder
-                    sortOrder = 1
-                    featDesc = colorize(featDesc, self.colors['highlight1'] + (',dim' if dimmit else ''))
-
-                if ftypeCode == 'AMBIGUOUS_ENTITY':
-                    if featDesc.startswith(' ['):
-                        featDesc = 'Ambiguous!'
-                    featDesc = colorize(featDesc, self.colors['bad'])
-
-                #--sort rejected matches lower 
-                if dimmit: 
-                    sortOrder += .5
-
-                featureDict = {}
-                featureDict['sortOrder'] = sortOrder
-                featureDict['matchScore'] = featureData['matchScore'] if 'matchScore' in featureData else 0
-                featureDict['entityCount'] = featureData['entityCount'] if 'entityCount' in featureData else 0
-                featureDict['featDesc'] = featDesc
-                featureArray[ftypeId][entityId].append(featureDict)
+                featureArray[ftypeId][entityId].append(formattedFeature)
 
         #--prepare the table
         tblRows.append(dataSourceRow)
@@ -3519,7 +3567,7 @@ class G2CmdShell(cmd.Cmd):
         return recordDisplay
 
     # -----------------------------
-    def whyGetFeatures(self, jsonData, entityId, internalId =None):
+    def whyGetFeatures(self, jsonData, entityId, internalId = None):
         bestEntity = None
         bestRecord = None
         for resolvedEntity in jsonData['ENTITIES']:
@@ -3534,8 +3582,143 @@ class G2CmdShell(cmd.Cmd):
             print('\nno features found for resolved entity %s, internal ID %s\n' % (entityId, internalId))
             return {}
 
+        features = self.buildoutRecordFeatures(bestRecord['FEATURES'], bestEntity['RESOLVED_ENTITY']['FEATURES'])
+        return features
+
+    # -----------------------------
+    def whyFormatFeature(self, featureData, whyKey):
+        ftypeId = featureData['ftypeId']
+        ftypeCode = featureData['ftypeCode']
+        featDesc = featureData['featDesc'].strip()
+        dimmit = False
+        featDesc += ' ['
+        if featureData['candidateCapReached'] == 'Y':
+            featDesc += '~'
+            dimmit = True
+        if featureData['scoringCapReached'] == 'Y':
+            featDesc += '!'
+            dimmit = True
+        if featureData['scoringWasSuppressed'] == 'Y':
+            featDesc += '#'
+            dimmit = True #False if whyType == 'whyEntity' else True
+        featDesc += str(featureData['entityCount']) + ']'
+
+        sortOrder = 3
+        if 'wasScored' in featureData:
+            if featureData['matchLevel'] in ('SAME', 'CLOSE'):
+                sortOrder = 1
+                featColor = self.colors['good'] 
+            else:
+                sortOrder = 2
+                if not whyKey:
+                    featColor = self.colors['bad']
+                elif type(whyKey) == dict and ('-' + ftypeCode) not in whyKey['matchKey']:
+                    featColor = self.colors['caution']
+                elif type(whyKey) == list and ('-' + ftypeCode) not in whyKey[0]['matchKey']:
+                    featColor = self.colors['caution']
+                else:
+                    featColor = self.colors['bad']
+            if dimmit: 
+                featColor += ',dim'
+            featDesc = colorize(featDesc, featColor)
+
+            #--note: addresses may score same tho not exact!
+            if featureData['matchLevel'] != 'SAME' or featureData['matchedFeatDesc'] != featureData['featDesc']:  
+                featDesc += '\n  '
+                featDesc += colorize('%s (%s)' % (featureData['matchedFeatDesc'].strip(), featureData['matchScoreDisplay']), featColor+',italics')
+
+        elif 'matchScore' in featureData: #--must be same and likley a candidate builder
+            sortOrder = 1
+            featDesc = colorize(featDesc, self.colors['highlight1'] + (',dim' if dimmit else ''))
+
+        if ftypeCode == 'AMBIGUOUS_ENTITY':
+            if featDesc.startswith(' ['):
+                featDesc = 'Ambiguous!'
+            featDesc = colorize(featDesc, self.colors['bad'])
+
+        #--sort rejected matches lower 
+        if dimmit: 
+            sortOrder += .5
+
+        featureDict = {}
+        featureDict['sortOrder'] = sortOrder
+        featureDict['matchScore'] = featureData['matchScore'] if 'matchScore' in featureData else 0
+        featureDict['entityCount'] = featureData['entityCount'] if 'entityCount' in featureData else 0
+        featureDict['featDesc'] = featDesc
+
+        return featureDict
+
+    # -----------------------------
+    def whyFormatFeature2(self, featureData1, whyKey):
+
+        print(json.dumps(featureData, indent=4))
+        ftypeId = featureData['ftypeId']
+        ftypeCode = featureData['ftypeCode']
+
+        featDesc1 = featureData['featDesc'].strip()
+        featDesc2 = featureData['matchedFeatDesc'].strip() if 'matchedFeatDesc' in featureData else ''
+
+        dimmit = False
+        entityCountDisplay = '['
+        if featureData['candidateCapReached'] == 'Y':
+            entityCountDisplay += '~'
+            dimmit = True
+        if featureData['scoringCapReached'] == 'Y':
+            entityCountDisplay += '!'
+            dimmit = True
+        if featureData['scoringWasSuppressed'] == 'Y':
+            entityCountDisplay += '#'
+            dimmit = False #False if whyType == 'whyEntity' else True
+        entityCountDisplay += str(featureData['entityCount']) + ']'
+
+        sortOrder = 3
+        featColor = ''
+        if 'wasScored' in featureData:
+            if featureData['matchLevel'] in ('SAME', 'CLOSE'):
+                sortOrder = 1
+                featColor = self.colors['good'] 
+            else:
+                sortOrder = 2
+                if not whyKey:
+                    featColor = self.colors['bad']
+                elif type(whyKey) == dict and ('-' + ftypeCode) not in whyKey['matchKey']:
+                    featColor = self.colors['caution']
+                elif type(whyKey) == list and ('-' + ftypeCode) not in whyKey[0]['matchKey']:
+                    featColor = self.colors['caution']
+                else:
+                    featColor = self.colors['bad']
+            if dimmit: 
+                featColor += ',dim'
+
+        elif 'matchScore' in featureData: #--must be same and likley a candidate builder
+            sortOrder = 1
+            featColor = self.colors['highlight1'] + (',dim' if dimmit else '')
+
+        if ftypeCode == 'AMBIGUOUS_ENTITY':
+            if not(featDesc1):
+                featDesc1 = 'Ambiguous!'
+                featDesc2 = 'Ambiguous!'
+            featColor = self.colors['bad']
+
+        #--sort rejected matches lower 
+        if dimmit: 
+            sortOrder += .5
+
+        displayInfo = {}
+        displayInfo['sortOrder'] = sortOrder
+        displayInfo['matchScore'] = featureData['matchScore'] if 'matchScore' in featureData else 0
+        displayInfo['entityCount'] = featureData['entityCount'] if 'entityCount' in featureData else 0
+        displayInfo['featDesc1'] = featDesc1
+        displayInfo['featDesc2'] = featDesc2
+        displayInfo['featColor'] = featColor
+        displayInfo['entityCountDisplay'] = entityCountDisplay
+        displayInfo['matchScoreDisplay'] = featureData['matchScoreDisplay'] if 'matchScoreDisplay' in featureData else ''
+        return displayInfo
+
+    # -----------------------------
+    def buildoutRecordFeatures(self, recordFeatures, featureData):
         features = {}
-        for featRecord in bestRecord['FEATURES']:
+        for featRecord in recordFeatures:
             libFeatId = featRecord['LIB_FEAT_ID']
             if libFeatId not in features:
                 features[featRecord['LIB_FEAT_ID']] = {}
@@ -3549,8 +3732,8 @@ class G2CmdShell(cmd.Cmd):
                 features[libFeatId]['scoringCapReached'] = 'N'
                 features[libFeatId]['scoringWasSuppressed'] = 'N'
 
-        for ftypeCode in bestEntity['RESOLVED_ENTITY']['FEATURES']:
-            for distinctFeatureRecord in bestEntity['RESOLVED_ENTITY']['FEATURES'][ftypeCode]:
+        for ftypeCode in featureData:
+            for distinctFeatureRecord in featureData[ftypeCode]:
                 for featRecord in distinctFeatureRecord['FEAT_DESC_VALUES']:
                     libFeatId = featRecord['LIB_FEAT_ID']
                     if libFeatId in features:
@@ -3573,8 +3756,6 @@ class G2CmdShell(cmd.Cmd):
         whyKey['matchKey'] = matchInfo['WHY_KEY']
         whyKey['ruleCode'] = self.getRuleDesc(matchInfo['WHY_ERRULE_CODE'])
 
-        startedWithNoFeatures = not features #--adjusted for how as it does not produce a features section
-
         #--update from candidate section of why
         if 'CANDIDATE_KEYS' in matchInfo:
             for ftypeCode in matchInfo['CANDIDATE_KEYS']:
@@ -3596,7 +3777,7 @@ class G2CmdShell(cmd.Cmd):
             bestScoreRecord = {}
             for featRecord in matchInfo['FEATURE_SCORES'][ftypeCode]:
                 #--BUG WHERE INBOUND/CANDIDATE IS SOMETIMES REVERSED...  
-                if featRecord['INBOUND_FEAT_ID'] in features or startedWithNoFeatures: 
+                if featRecord['INBOUND_FEAT_ID'] in features:
                     libFeatId = featRecord['INBOUND_FEAT_ID']
                     libFeatDesc = featRecord['INBOUND_FEAT']
                     matchedFeatId = featRecord['CANDIDATE_FEAT_ID']
@@ -3609,7 +3790,7 @@ class G2CmdShell(cmd.Cmd):
                     matchedFeatId = featRecord['INBOUND_FEAT_ID']
                     matchedFeatDesc = featRecord['INBOUND_FEAT']
                 else:
-                    print('warning: scored feature %s not in record!' % libFeatId)
+                    print('warning: scored feature %s not in either record!' % libFeatId)
                     continue   
 
                 featRecord = self.whySetMatchScore(featRecord)
@@ -3714,7 +3895,20 @@ class G2CmdShell(cmd.Cmd):
         json_data = json.loads(response)
         if debugOutput:
             showApiDebug('get', apiCall, getFlagList, json_data if response else '{}')
-        get_entity_data = json_data 
+        getEntityData = json_data 
+
+        #--build record feature matrix
+        #records_by_feature = {} #--used to find the best matching record(s)
+        features_by_record = {}
+        for recordData in getEntityData['RESOLVED_ENTITY']['RECORDS']:
+            if recordData['DATA_SOURCE'] not in features_by_record:
+                features_by_record[recordData['DATA_SOURCE']] = {}
+            features_by_record[recordData['DATA_SOURCE']][recordData['RECORD_ID']] = \
+                self.buildoutRecordFeatures(recordData['FEATURES'], getEntityData['RESOLVED_ENTITY']['FEATURES'])
+            #for featureData in recordData['FEATURES']:
+            #    if featureData['LIB_FEAT_ID'] not in records_by_feature:
+            #        records_by_feature[featureData['LIB_FEAT_ID']] = []
+            #    records_by_feature[featureData['LIB_FEAT_ID']].append(recordData['DATA_SOURCE'] + self.dsrc_record_sep + recordData['RECORD_ID'])
 
         howFlagList = ['G2_HOW_ENTITY_DEFAULT_FLAGS', 'G2_INCLUDE_FEATURE_SCORES']
         howFlagBits = self.computeApiFlags(howFlagList)
@@ -3743,13 +3937,14 @@ class G2CmdShell(cmd.Cmd):
         for step_data in json_data['HOW_RESULTS']['RESOLUTION_STEPS']:
             step_count += 1
             step_num = step_data['STEP']
-            for virtual_entity in ['VIRTUAL_ENTITY_1', 'VIRTUAL_ENTITY_2']:
-                virtual_entity_data = self.get_virtual_entity_data(step_data[virtual_entity])
-                step_data[virtual_entity]['record_count'] = virtual_entity_data['record_count']
-                step_data[virtual_entity]['record_list'] = virtual_entity_data['records']
-                step_data[virtual_entity]['node_type'] = virtual_entity_data['type']
-                step_data[virtual_entity]['node_desc'] = virtual_entity_data['description']
-                step_data[virtual_entity]['colored_desc'] = virtual_entity_data['colored_desc']
+            for virtual_entity_num in ['VIRTUAL_ENTITY_1', 'VIRTUAL_ENTITY_2']:
+                virtual_entity_data = self.get_virtual_entity_data(step_data[virtual_entity_num], features_by_record)
+                step_data[virtual_entity_num]['record_count'] = virtual_entity_data['record_count']
+                step_data[virtual_entity_num]['records'] = virtual_entity_data['records']
+                step_data[virtual_entity_num]['node_type'] = virtual_entity_data['type']
+                step_data[virtual_entity_num]['node_desc'] = virtual_entity_data['description']
+                step_data[virtual_entity_num]['colored_desc'] = virtual_entity_data['colored_desc']
+                step_data[virtual_entity_num]['features'] = virtual_entity_data['features']
 
             step_data['singleton_nodes'] = []
             step_data['aggregate_nodes'] = []
@@ -3760,17 +3955,11 @@ class G2CmdShell(cmd.Cmd):
                     step_data['aggregate_nodes'].append(step_data[virtual_entity]['VIRTUAL_ENTITY_ID'])
 
             if len(step_data['singleton_nodes']) == 2:
-                step_data['step_type'] = 'Create node'
-            #    print(json.dumps(step_data, indent=4))
-            #    print(f'\nexpected: only singletons!')
-            #    input('wait')
+                step_data['step_type'] = 'Create entity'
             elif len(step_data['aggregate_nodes']) == 2:
-                step_data['step_type'] = 'Combine nodes'
-            #    print(json.dumps(step_data, indent=4))
-            #    print(f'\ninteresting: only aggregates!')
-            #    input('wait')
+                step_data['step_type'] = 'Combine entity'
             else:
-                step_data['step_type'] = 'Add record to node'
+                step_data['step_type'] = 'Add record to entity'
 
             resolution_steps[step_num] = step_data
             new_virtual_id = step_data.get('RESULT_VIRTUAL_ENTITY_ID', None)
@@ -3780,7 +3969,6 @@ class G2CmdShell(cmd.Cmd):
                     print(f'\nunexpected: multiple steps for {new_virtual_id} {step_num} and ' + aggregate_nodes[new_virtual_id]['final_step'])
                     input('wait')
                 aggregate_nodes[new_virtual_id] = {'final_step': step_num, 'all_steps': []}
-
 
         #--start from the end and combine the prior steps that just add another singleton 
         render_node_list = []
@@ -3796,16 +3984,9 @@ class G2CmdShell(cmd.Cmd):
                 aggregate_node_id = current_node_id
                 while True:
                     prior_step = aggregate_nodes[aggregate_node_id]['final_step']
-
-                    #--add this step to the current aggregate if any singles
-                    if True: #len(resolution_steps[prior_step]['singleton_nodes']) > 0: 
-                        aggregate_nodes[current_node_id]['all_steps'].append(prior_step)
-
-                    #--continue to next aggregate if only 1 
+                    aggregate_nodes[current_node_id]['all_steps'].append(prior_step)
                     if len(resolution_steps[prior_step]['aggregate_nodes']) == 1: 
                         aggregate_node_id = resolution_steps[prior_step]['aggregate_nodes'][0]
-
-                    #--done with chain if aggregates 0 or 2   
                     else:
                         break
 
@@ -3817,8 +3998,6 @@ class G2CmdShell(cmd.Cmd):
                     for aggregate_node_id in resolution_steps[prior_step]['aggregate_nodes']:
                         current_aggregate_list.append(aggregate_node_id)
                         render_node_list.append({'node_id': aggregate_node_id, 'parent_node': current_node_id})
-
-        #print(json.dumps(aggregate_nodes, indent=4))
 
         #--start rendering nodes
         root_node = Node('root')
@@ -3837,9 +4016,9 @@ class G2CmdShell(cmd.Cmd):
                     this_node_index += 1
                     if final_state_data['VIRTUAL_ENTITY_ID'] == this_node_id:
                         break
-                this_node.node_desc = colorize(f'{this_node_id}: final node {this_node_index} of {num_final_nodes}', 'dim')
+                this_node.node_desc = colorize(f'{this_node_id}: final entity {this_node_index} of {num_final_nodes}', 'dim')
             else:
-                this_node.node_desc = colorize(f'{this_node_id}: aggregate node', 'dim')
+                this_node.node_desc = colorize(f'{this_node_id}: temporary entity', 'dim')
 
             #--go through all the steps that built this node
             for step_num in sorted(aggregate_nodes[this_node_id]['all_steps']):
@@ -3849,68 +4028,79 @@ class G2CmdShell(cmd.Cmd):
                 step_node.node_desc = 'Step ' + str(step_num) + ': ' + step_data['step_type']
                 this_node.add_child(step_node)
 
-                virtual_id1 = colorize(step_data['VIRTUAL_ENTITY_1']['VIRTUAL_ENTITY_ID'], 'dim')
-                virtual_id2 = colorize(step_data['VIRTUAL_ENTITY_2']['VIRTUAL_ENTITY_ID'], 'dim')
+                #--always ensure lone singleton on the left
+                if step_data['VIRTUAL_ENTITY_1']['node_type'] != 'singleton' and step_data['VIRTUAL_ENTITY_2']['node_type'] == 'singleton':
+                    left_virtual_entity = 'VIRTUAL_ENTITY_2'
+                    right_virtual_entity = 'VIRTUAL_ENTITY_1'
+                else:
+                    left_virtual_entity = 'VIRTUAL_ENTITY_1'
+                    right_virtual_entity = 'VIRTUAL_ENTITY_2'
+
+                features = step_data[left_virtual_entity]['features']
+                step_data['MATCH_INFO']['WHY_KEY'] = step_data['MATCH_INFO']['MATCH_KEY']
+                step_data['MATCH_INFO']['WHY_ERRULE_CODE'] = step_data['MATCH_INFO']['ERRULE_CODE']
+                why_key, features = self.whyAddMatchInfo(features, step_data['MATCH_INFO'])
+
+                left_matching_record_list = {}
+                right_matching_record_list = {}
+                for lib_feat_id in features:
+                    if 'matchedFeatId' in features[lib_feat_id]:
+                        for record_key in features[lib_feat_id]['record_list']:
+                            if record_key not in left_matching_record_list:
+                                left_matching_record_list[record_key] = []
+                            left_matching_record_list[record_key].append(lib_feat_id)
+
+                        matched_feat_id = features[lib_feat_id]['matchedFeatId']
+                        for record_key in step_data[right_virtual_entity]['features'][matched_feat_id]['record_list']:
+                            if record_key not in right_matching_record_list:
+                                right_matching_record_list[record_key] = []
+                            right_matching_record_list[record_key].append(matched_feat_id)
+
+                row_title = colorize('VIRTUAL_ID', 'dim')
+                virtual_id1 = colorize(step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'], 'dim')
+                virtual_id2 = colorize(step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'], 'dim')
 
                 tblTitle = None
                 tblColumns = []
-                tblColumns.append({'name': 'VIRTUAL_ID', 'width': 20, 'align': 'left'})
+                tblColumns.append({'name': row_title, 'width': 20, 'align': 'left'})
                 tblColumns.append({'name': virtual_id1, 'width': 50, 'align': 'left'})
                 tblColumns.append({'name': virtual_id2, 'width': 50, 'align': 'left'})
                 tblRows = []
 
-                tblRow = ['DATA_SOURCES']
-                for virtual_entity in ['VIRTUAL_ENTITY_1', 'VIRTUAL_ENTITY_2']:
+                row_title = colorize('DATA_SOURCES', self.colors['rowTitle'])
+                tblRow = [row_title]
+                for virtual_entity in [left_virtual_entity, right_virtual_entity]:
                     tblRow.append(step_data[virtual_entity]['colored_desc'])
                 tblRows.append(tblRow)
 
                 step_data['MATCH_INFO']['matchKey'] = step_data['MATCH_INFO']['MATCH_KEY']
-                step_data['MATCH_INFO']['ruleCode'] = step_data['MATCH_INFO']['ERRULE_CODE']
+                step_data['MATCH_INFO']['ruleCode'] = self.getRuleDesc(step_data['MATCH_INFO']['ERRULE_CODE'])
                 why_result = formatMatchData(step_data['MATCH_INFO'], self.colors)
-                tblRow = ['WHY RESULT', why_result, 'n/a']
+                row_title = colorize('WHY_KEY', self.colors['rowTitle'])
+                tblRow = [row_title, why_result, 'n/a']
                 tblRows.append(tblRow)
 
-                #--get best feature score records
-                bestFeatures = {}
-                for ftypeCode in step_data['MATCH_INFO']['FEATURE_SCORES']:
-                    ftypeId = self.ftypeCodeLookup[ftypeCode]['FTYPE_ID']
-                    bestFeatures[ftypeId] = {}
-                    for featRecord in step_data['MATCH_INFO']['FEATURE_SCORES'][ftypeCode]:
-                        featRecord = self.whySetMatchScore(featRecord)
-                        if 'matchScore' not in bestFeatures[ftypeId] or featRecord['MATCH_SCORE'] > bestFeatures[ftypeId]['matchScore']:
-                            bestFeatures[ftypeId]['ftypeCode'] = ftypeCode
-                            bestFeatures[ftypeId]['libFeatId'] = featRecord['INBOUND_FEAT_ID']
-                            bestFeatures[ftypeId]['featDesc'] = featRecord['INBOUND_FEAT']
-                            bestFeatures[ftypeId]['matchScore'] = featRecord['MATCH_SCORE']
-                            bestFeatures[ftypeId]['matchScoreDisplay'] = featRecord['MATCH_SCORE_DISPLAY']
-                            bestFeatures[ftypeId]['matchLevel'] = featRecord['SCORE_BUCKET']
-                            bestFeatures[ftypeId]['matchedFeatId'] = featRecord['CANDIDATE_FEAT_ID']
-                            bestFeatures[ftypeId]['matchedFeatDesc'] = featRecord['CANDIDATE_FEAT']
-                            bestFeatures[ftypeId]['featBehavior'] = featRecord['SCORE_BEHAVIOR']
+                features_by_type = {}
+                for lib_feat_id in features:
+                    feature_data = features[lib_feat_id]
+                    ftype_id = feature_data['ftypeId']
+                    formatted_feature = self.whyFormatFeature(feature_data, step_data['MATCH_INFO'])
+                    if ftype_id not in features_by_type:
+                        features_by_type[ftype_id] = []
+                    features_by_type[ftype_id].append(formatted_feature)
 
-                #--add the feature nodes
-                for ftypeId in sorted(bestFeatures.keys(), key=lambda k: self.featureSequence[k]):
-                    featRecord = bestFeatures[ftypeId]
-
-                    if featRecord['matchLevel'] in ('SAME', 'CLOSE'):
-                        featColor = self.colors['good'] 
-                    elif '-' + ftypeCode in step_data['MATCH_INFO']['MATCH_KEY']:
-                        featColor = self.colors['bad']
-                    else:
-                        featColor = self.colors['caution']
-
-                    featDesc1 = featRecord['featDesc'] + ' (' + featRecord['matchScoreDisplay'] + ')'
-                    featDesc2 = featRecord['matchedFeatDesc'] + ' (' + featRecord['matchScoreDisplay'] + ')'
-
-
-                    tblRow = [colorize(featRecord['ftypeCode'], self.colors['highlight1'])]
-                    tblRow.append(colorize(featDesc1, featColor))
-                    tblRow.append(colorize(featDesc2, featColor))
+                for ftypeId in sorted(features_by_type.keys(), key=lambda k: self.featureSequence[k]):
+                    ftype_code = self.ftypeLookup[ftypeId]['FTYPE_CODE']
+                    tblRow = [colorize(ftype_code, self.colors['rowTitle'])]
+                    feature_desc1 = []
+                    feature_desc2 = []
+                    for item in sorted(sorted(features_by_type[ftypeId], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
+                        print(item)
+                        feature_desc1.append(item['featDesc'])
+                        feature_desc2.append(item['featDesc'])
+                    tblRow.append('\n'.join(feature_desc1))
+                    tblRow.append('\n'.join(feature_desc2))
                     tblRows.append(tblRow)
-
-                #feature_node = Node(f'step{step_num}-score{ftypeId}')
-                #feature_node.node_desc = featureNodeDesc
-                #step_node.add_child(feature_node)
 
                 self.renderTable(tblTitle, tblColumns, tblRows, displayFlag = 'No')
                 step_node.node_text = self.currentRenderString
@@ -3921,9 +4111,8 @@ class G2CmdShell(cmd.Cmd):
         elif len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']) > 1:
             how_warning = 'MULIPLE VIRTUAL ENTITIES WITHOUT REEVALUATION FLAG'
 
-        entity_name = get_entity_data['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
-        colored_entity_id = colorize(entityId, self.colors['entityid'])
-        how_header = f'How report for entity: {colored_entity_id} - {entity_name}\n'
+        entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
+        how_header = colorize(f'\nHow report for entity: {entityId} - {entity_name}\n', self.colors['entityid'])
         if how_warning:
             colored_warning = colorize(how_warning, self.colors['bad'])
             how_header += f'\n\t{colored_warning}\n'
@@ -3938,30 +4127,46 @@ class G2CmdShell(cmd.Cmd):
         return
 
     # -----------------------------
-    def get_virtual_entity_data(self, _data):
-        virtual_entity_data = {'id': _data['VIRTUAL_ENTITY_ID']}
+    def get_virtual_entity_data(self, raw_virtual_entity_data, features_by_record):
+        virtual_entity_data = {'id': raw_virtual_entity_data['VIRTUAL_ENTITY_ID']}
         virtual_entity_data['record_count'] = 0
         virtual_entity_data['records'] = {}
-        for member_data in _data['MEMBER_RECORDS']:
-            for record in member_data['RECORDS']:
+        virtual_entity_data['features'] = {}
+        for member_data in raw_virtual_entity_data['MEMBER_RECORDS']:
+            for record in sorted(member_data['RECORDS'], key = lambda k: k['DATA_SOURCE'] + k['RECORD_ID']):
+                virtual_entity_data['record_count'] += 1
                 if record['DATA_SOURCE'] not in virtual_entity_data['records']:
                     virtual_entity_data['records'][record['DATA_SOURCE']] = []
                 virtual_entity_data['records'][record['DATA_SOURCE']].append(record['RECORD_ID'])
-                virtual_entity_data['record_count'] += 1
 
-        #--a member is an obs_ent, despite how man records it has
-        if len(_data['MEMBER_RECORDS']) == 1:
+                #--creates the master feature list for the virtual entity (accumulating which records have which features)
+                record_key = record['DATA_SOURCE'] + self.dsrc_record_sep + record['RECORD_ID']
+                for lib_feat_id in features_by_record[record['DATA_SOURCE']][record['RECORD_ID']]:
+                    if lib_feat_id not in virtual_entity_data['features']:
+                        virtual_entity_data['features'][lib_feat_id] = dict(features_by_record[record['DATA_SOURCE']][record['RECORD_ID']][lib_feat_id])
+                        virtual_entity_data['features'][lib_feat_id]['record_list'] = [record_key]
+                    elif record_key not in virtual_entity_data['features'][lib_feat_id]['record_list']:
+                        virtual_entity_data['features'][lib_feat_id]['record_list'].append(record_key)
+
+        #--a member is an obs_ent, despite how many records it has
+        if len(raw_virtual_entity_data['MEMBER_RECORDS']) == 1:
+            additional_note = ''
+            if virtual_entity_data['record_count'] > 1: #--its got addtional pure dupes
+                additional_note = colorize(' +' + str(virtual_entity_data['record_count'] - 1) + ' pure dupes', 'dim')
+
             virtual_entity_data['type'] = 'singleton'
+            record = raw_virtual_entity_data['MEMBER_RECORDS'][0]['RECORDS'][0]
+            virtual_entity_data['description'] = record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note
+            virtual_entity_data['colored_desc'] = colorize(record['DATA_SOURCE'], self.colors['datasource']) + ': ' + record['RECORD_ID'] + additional_note
+
         else:
             virtual_entity_data['type'] = 'aggregate'
+            virtual_entity_data['description'] = 'Aggregate of ' + str(virtual_entity_data['record_count']) + ' records'
+            virtual_entity_data['colored_desc'] = virtual_entity_data['description']
 
-        if virtual_entity_data['record_count'] == 1:
-            record = _data['MEMBER_RECORDS'][0]['RECORDS'][0]
-            virtual_entity_data['description'] = record['DATA_SOURCE'] + ': ' + record['RECORD_ID']
-            virtual_entity_data['colored_desc'] = colorize(record['DATA_SOURCE'], self.colors['datasource']) + ': ' + record['RECORD_ID']
-        else:
-            virtual_entity_data['description'] = virtual_entity_data['id'] + ' ' + str(virtual_entity_data['record_count']) + ' records'
-            virtual_entity_data['colored_desc'] = colorize(virtual_entity_data['id'], self.colors['entityid'])  + ' ' + str(virtual_entity_data['record_count']) + ' records'
+        #if virtual_entity_data['id'] == 'V3':
+        #    print(json.dumps(virtual_entity_data, indent=4))
+        #    input('wait1')
 
         return virtual_entity_data
 
@@ -4068,7 +4273,7 @@ class G2CmdShell(cmd.Cmd):
         #--also write to the lastTableData variable in case cannot write to file
         fmtTableString = ''
         if tblTitle:
-            fmtTableString = tblTitle + '\n'
+            fmtTableString = colorize(tblTitle, titleColor) + '\n'
         fmtTableString += tableObject.get_string() + '\n'
 
         writeMode = 'w'
@@ -4347,7 +4552,7 @@ def showDebug(call, output=''):
         print()
     else: 
         try:
-            with open(debugOutput, 'w') as f:
+            with open(debugOutput, 'a') as f:
                 f.write('- %s - \n' % call)
                 if type(output) == dict:
                     f.write(json.dumps(output))
