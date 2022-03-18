@@ -329,6 +329,10 @@ class G2CmdShell(cmd.Cmd):
             self.auditFile = None
             self.auditData = {}
 
+        #--default settings for data and cross sources summary reports
+        self.settingsFileData['dataSourceSupression'] = self.settingsFileData.get('dataSourceSupression', True)
+        self.settingsFileData['statisticLevel'] = self.settingsFileData.get('statisticLevel', 'RECORD')
+
         #--history
         self.readlineAvail = True if 'readline' in sys.modules else False
         self.histDisable = hist_disable
@@ -554,6 +558,15 @@ class G2CmdShell(cmd.Cmd):
         else:
             printWithNewLines('Color scheme %s not valid!' % (arg), 'B')
             return
+
+    # -----------------------------
+    def do_toggle_dataSourceSuppression (self, arg):
+        if self.settingsFileData['dataSourceSupression']:
+            self.settingsFileData['dataSourceSupression'] = False 
+            printWithNewLines('dataSourceSupression is now OFF', 'B')
+        else:
+            self.settingsFileData['dataSourceSupression'] = True 
+            printWithNewLines('dataSourceSupression is now ON', 'B')
 
     # -----------------------------
     def do_versions (self,arg):
@@ -1418,7 +1431,7 @@ class G2CmdShell(cmd.Cmd):
         '\nDisplays the stats for the different match levels within each data source.' \
         '\n\nSyntax:' \
         '\n\tdataSourceSummary (with no parameters displays the overall stats)' \
-        '\n\tdataSourceSummary <dataSourceCode> <matchLevel>  where 0=Singletons, 1=Duplicates, 2=Ambiguous Matches, 3 = Possible Matches, 4=Possibly Relateds\n'
+        '\n\tdataSourceSummary <dataSourceCode> <matchLevel>  where 0=Singletons, 1=Duplicates, 2=Ambiguous, 3=Possibles, 4=Relationships\n'
 
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
             printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
@@ -1447,11 +1460,11 @@ class G2CmdShell(cmd.Cmd):
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['ENTITY_COUNT']) if 'ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(self.snapshotData['DATA_SOURCES'][dataSource]['COMPRESSION'] if 'COMPRESSION' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['SINGLE_COUNT']) if 'SINGLE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                if 'DUPLICATE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource]:
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['DUPLICATE_COUNT']) if 'DUPLICATE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['AMBIGUOUS_MATCH_COUNT']) if 'AMBIGUOUS_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['POSSIBLE_MATCH_COUNT']) if 'POSSIBLE_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['POSSIBLY_RELATED_COUNT']) if 'POSSIBLY_RELATED_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
+                if self.settingsFileData['statisticLevel'] == 'RECORD':
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('DUPLICATE_RECORD_COUNT', 0)))
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('AMBIGUOUS_MATCH_RECORD_COUNT', 0)))
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('POSSIBLE_MATCH_RECORD_COUNT', 0)))
+                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('POSSIBLY_RELATED_RECORD_COUNT', 0)))
                 else:
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['DUPLICATE_ENTITY_COUNT']) if 'DUPLICATE_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['AMBIGUOUS_MATCH_ENTITY_COUNT']) if 'AMBIGUOUS_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
@@ -1501,7 +1514,7 @@ class G2CmdShell(cmd.Cmd):
                 while True:
                     if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
                         exportRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(exportRecords[0])
+                        returnCode = self.do_get(exportRecords[0], dataSourceFilter=[dataSource])
                     else:
                         exportRecords = sampleRecords[currentSample].split()[:2]
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
@@ -1514,7 +1527,7 @@ class G2CmdShell(cmd.Cmd):
                                     exportRecords = ambiguousList
                                 else:
                                     pass #--if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(exportRecords))
+                        returnCode = self.do_compare(','.join(exportRecords), dataSourceFilter=[dataSource])
                     if returnCode != 0:
                         printWithNewLines('The statistics loaded are out of date for this record!','E')
                     while True:
@@ -1593,7 +1606,7 @@ class G2CmdShell(cmd.Cmd):
         '\n\nSyntax:' \
         '\n\tcrossSourceSummary (with no parameters displays the overall stats)' \
         '\n\tcrossSourceSummary <dataSource1> (displays the cross matches for that data source only)' \
-        '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous Matches, 3 = Possible Matches, 4=Possibly Relateds\n'
+        '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships\n'
  
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
             printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
@@ -1624,11 +1637,13 @@ class G2CmdShell(cmd.Cmd):
                     row = []
                     row.append(colorize(dataSource1, self.colors['datasource']))
                     row.append(colorize(dataSource2, self.colors['datasource']))
-                    if 'MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]:
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_COUNT']) if 'MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_COUNT']) if 'AMBIGUOUS_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLE_MATCH_COUNT']) if 'POSSIBLE_MATCH_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_COUNT']) if 'POSSIBLY_RELATED_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+
+                    cross_stat_level = 'RECORD'
+                    if cross_stat_level == 'RECORD':
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_RECORD_COUNT']) if 'MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_RECORD_COUNT']) if 'AMBIGUOUS_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLE_MATCH_RECORD_COUNT']) if 'POSSIBLE_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
+                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_RECORD_COUNT']) if 'POSSIBLY_RELATED_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
                     else:
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_ENTITY_COUNT']) if 'MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_ENTITY_COUNT']) if 'AMBIGUOUS_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
@@ -1636,6 +1651,7 @@ class G2CmdShell(cmd.Cmd):
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_ENTITY_COUNT']) if 'POSSIBLY_RELATED_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
 
                     tblRows.append(row)
+
             self.renderTable(tblTitle, tblColumns, tblRows)
 
         else:
@@ -1685,7 +1701,7 @@ class G2CmdShell(cmd.Cmd):
 
                     if matchLevelCode in ('MATCH_SAMPLE'):
                         exportRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(exportRecords[0])
+                        returnCode = self.do_get(exportRecords[0], dataSourceFilter=[dataSource1, dataSource2])
                     else:
                         exportRecords = sampleRecords[currentSample].split()[:2]
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
@@ -1698,7 +1714,7 @@ class G2CmdShell(cmd.Cmd):
                                     exportRecords = ambiguousList
                                 else:
                                     pass #--if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(exportRecords))
+                        returnCode = self.do_compare(','.join(exportRecords), dataSourceFilter=[dataSource1, dataSource2])
 
                     if returnCode != 0:
                         printWithNewLines('The statistics loaded are out of date for this entity','E')
@@ -1965,7 +1981,7 @@ class G2CmdShell(cmd.Cmd):
             print('')
 
     # -----------------------------
-    def do_get(self,arg):
+    def do_get(self, arg, **kwargs):
 
         '\nDisplays a particular entity by entity_id or by data_source and record_id.' \
         '\n\nSyntax:' \
@@ -1983,6 +1999,12 @@ class G2CmdShell(cmd.Cmd):
 
         #--no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+
+        #--get possible data source list
+        if 'dataSourceFilter' in kwargs and self.settingsFileData['dataSourceSupression']:
+            dataSourceFilter = kwargs['dataSourceFilter']
+        else:
+            dataSourceFilter = None
 
         if 'DETAIL ' in arg.upper():
             showDetail = True
@@ -2056,27 +2078,40 @@ class G2CmdShell(cmd.Cmd):
         tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
 
         #--summarize by data source
+        additionalDataSources = False
         if reportType == 'Summary':
             dataSources = {}
             recordList = []
             for record in resolvedJson['RESOLVED_ENTITY']['RECORDS']:
                 if record['DATA_SOURCE'] not in dataSources:
                     dataSources[record['DATA_SOURCE']] = []
+                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                    additionalDataSources = True
+                    continue
                 dataSources[record['DATA_SOURCE']].append(record)
 
             #--summarize by data source
             for dataSource in sorted(dataSources):
-                recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
-                row = [recordData, entityData, otherData]
+                if dataSources[dataSource]:
+                    recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
+                    row = [recordData, entityData, otherData]
+                else:
+                    row = [dataSource, ' ** suppressed ** ', '']
                 recordList.append(row)
 
         #--display each record
         else:
             recordList = []
             for record in sorted(resolvedJson['RESOLVED_ENTITY']['RECORDS'], key = lambda k: (k['DATA_SOURCE'], k['RECORD_ID'])):
+                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                    additionalDataSources = True
+                    continue
                 recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
                 row = [recordData, entityData, otherData]
                 recordList.append(row)
+
+        #if additionalDataSources:
+        #    tblTitle += ' ' + colorize('** additionalDataSources **', 'blink'q)
 
         #--display if no relationships
         if relatedEntityCount == 0:
@@ -2191,78 +2226,6 @@ class G2CmdShell(cmd.Cmd):
         return recordData, entityData, otherData
 
     # -----------------------------
-    def getFeatures(self, entityID):
-
-        getFlagList = []
-        getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-        getFlagBits = self.computeApiFlags(getFlagList)
-
-        apiCall = f'getEntityByEntityIDV2({entityID}, {getFlagBits}, response)' 
-        try: 
-            response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), getFlagBits, response)
-            response = response.decode() if response else ''
-        except G2Exception as err:
-            printWithNewLines(str(err), 'B')
-            return -1 if calledDirect else 0
-
-        if debugOutput:
-            showApiDebug('get', apiCall, getFlagList, json.loads(response) if response else '{}')
-
-        if len(response) == 0:
-            printWithNewLines('0 records found %s' % response, 'B')
-            return -1 if calledDirect else 0
-        jsonData = json.loads(response)
-
-        g2_diagnostic_module = G2Diagnostic.G2Diagnostic()
-        if apiVersion['VERSION'][0:1] == '2':
-            g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
-        else: #--eventually deprecate the above
-            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
-
-        #--get the features in order
-        orderedFeatureList = []
-        for ftypeId in self.featureSequence: #sorted(featureArray, key=lambda k: self.featureSequence[k]):
-            ftypeCode = self.ftypeLookup[ftypeId]['FTYPE_CODE']
-            for distinctFeatureData in jsonData['RESOLVED_ENTITY']['FEATURES'].get(ftypeCode,[]):
-                for featureData in distinctFeatureData['FEAT_DESC_VALUES']:
-                    usageType = featureData.get('USAGE_TYPE')
-                    orderedFeatureList.append({'ftypeCode': ftypeCode, 
-                                               'usageType': distinctFeatureData.get('USAGE_TYPE'), 
-                                               'featureDesc': featureData.get('FEAT_DESC'),
-                                               'libFeatId': featureData['LIB_FEAT_ID']})
-        tblRows = []
-        for libFeatData in orderedFeatureList:
-            ftypeCode = libFeatData['ftypeCode']
-            usageType = libFeatData['usageType']
-            libFeatId = libFeatData['libFeatId']
-            featureDesc = libFeatData['featureDesc']
-
-            try: 
-                response = bytearray() 
-                g2_diagnostic_module.getFeature(libFeatId, response)
-                response = response.decode() if response else ''
-            except G2Exception as err:
-                print(err)
-            jsonData = json.loads(response)
-
-            ftypeDisplay = ftypeCode + (' (' + usageType + ')' if usageType else '')
-            ftypeDisplay += '\n  ' + colorize(f'id: {libFeatId}', 'dim')
-
-            #--standardize the order of the attributes
-            for i in range(len(jsonData['ELEMENTS'])):
-                attrRecord = self.ftypeAttrLookup[ftypeCode].get(jsonData['ELEMENTS'][i]['FELEM_CODE'])
-                attrId = attrRecord['ATTR_ID'] if attrRecord else 9999999
-                jsonData['ELEMENTS'][i]['ATTR_ID'] = attrId
-
-            felemDisplayList = []
-            for elementData in sorted(sorted(jsonData['ELEMENTS'], key=lambda k: (k['FELEM_CODE'])), key=lambda k: (k['ATTR_ID'])):
-                felemDisplayList.append(colorize(elementData['FELEM_CODE'], self.colors['highlight1']) + ': ' +  elementData['FELEM_VALUE'])
-
-            tblRows.append([ftypeDisplay, featureDesc, '\n'.join(felemDisplayList)])
-        return tblRows
-
-    # -----------------------------
     def getAmbiguousEntitySet(self, entityId):
         #--get other ambiguous relationships if this is the ambiguous entity
         getFlagList = []
@@ -2301,7 +2264,7 @@ class G2CmdShell(cmd.Cmd):
         return None
 
     # -----------------------------
-    def do_compare(self,arg):
+    def do_compare(self, arg, **kwargs):
         '\nCompares a set of entities by placing them side by side in a columnar format.'\
         '\n\nSyntax:' \
         '\n\tcompare <entity_id1> <entity_id2>' \
@@ -2314,6 +2277,12 @@ class G2CmdShell(cmd.Cmd):
 
         #--no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+
+        #--get possible data source list
+        if 'dataSourceFilter' in kwargs and self.settingsFileData['dataSourceSupression']:
+            dataSourceFilter = kwargs['dataSourceFilter']
+        else:
+            dataSourceFilter = None
 
         fileName = None
         if type(arg) == str and 'TO' in arg.upper():
@@ -2388,11 +2357,22 @@ class G2CmdShell(cmd.Cmd):
             entityData['crossRelations'] = []
             entityData['otherRelations'] = []
  
+            additionalDataSources = False
             for record in jsonData['RESOLVED_ENTITY']['RECORDS']:
+
                 if record['DATA_SOURCE'] not in entityData['dataSources']:
-                    entityData['dataSources'][record['DATA_SOURCE']] = [record['RECORD_ID']]
+                    if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                        entityData['dataSources'][record['DATA_SOURCE']] = ['** suppressed **']
+                    else:
+                        entityData['dataSources'][record['DATA_SOURCE']] = [record['RECORD_ID']]
                 else:
-                    entityData['dataSources'][record['DATA_SOURCE']].append(record['RECORD_ID'])
+                    if dataSourceFilter and record['DATA_SOURCE'] in dataSourceFilter:
+                        entityData['dataSources'][record['DATA_SOURCE']].append(record['RECORD_ID'])
+
+                if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
+                    additionalDataSources = True
+                    continue
+
                 if 'NAME_DATA' in record:
                     for item in record['NAME_DATA']:
                         if item not in entityData['nameData']:
