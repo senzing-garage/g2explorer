@@ -5,7 +5,6 @@ import csv
 import glob
 import json
 import os
-import platform
 import re
 import sys
 import textwrap
@@ -14,50 +13,45 @@ import traceback
 from collections import OrderedDict
 import configparser
 import subprocess
-import tempfile
-try:
-    import readline
-    import atexit
-except ImportError:
-    readline = None
-
+import readline
+import atexit
 from io import StringIO
 
-try: 
-    from rich.table import Table
-    from rich.console import Console
-    has_rich = True
-except: has_rich = False
+# try: 
+#     from rich.table import Table
+#     from rich.console import Console
+#     has_rich = True
+# except: has_rich = False
  
 try: 
     from prettytable import PrettyTable 
     from prettytable import ALL as PRETTY_TABLE_ALL
+    try: #  supports both ptable and prettytable builds of prettytable (only prettytable has these styles)
+        from prettytable import SINGLE_BORDER, DOUBLE_BORDER, MARKDOWN, ORGMODE
+        pretty_table_style_available = True
+    except:
+        pretty_table_style_available = False
 except: 
     print('\nPlease install python pretty table (pip3 install prettytable)\n')
     sys.exit(1)
-
-try: #  supports both ptable and prettytable builds of prettytable (only prettytable has these styles)
-    from prettytable import SINGLE_BORDER, DOUBLE_BORDER, MARKDOWN, ORGMODE
-    pretty_table_style_available = True
-except:
-    pretty_table_style_available = False
 
 # Import from Senzing
 try:
     import G2Paths
     from G2Database import G2Database
-    from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2Exception, G2IniParams, G2Product
+    from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2IniParams, G2Product
 except:
 
     # Fall back to pre-Senzing-Python-SDK style of imports.
     try:
         import G2Paths
-        import G2ConfigMgr
-        import G2Diagnostic
-        import G2Engine
-        import G2Exception
-        import G2IniParams
-        import G2Product
+        from G2Product import G2Product
+        from G2Database import G2Database
+        from G2Diagnostic import G2Diagnostic
+        from G2Engine import G2Engine
+        from G2IniParams import G2IniParams
+        from G2ConfigMgr import G2ConfigMgr
+        from G2Exception import G2Exception
     except:
         print('\nPlease export PYTHONPATH=<path to senzing python directory>\n')
         sys.exit(1)
@@ -278,19 +272,10 @@ class Node(object):
 # ==============================
 class G2CmdShell(cmd.Cmd):
 
-    #Override function from cmd module to make command completion case insensitive
-    def completenames(self, text, *ignored):
-        dotext = 'do_'+text
-        return  [a[3:] for a in self.get_names() if a.lower().startswith(dotext.lower())]
-
-    #Hide functions from available list of Commands. Seperate help sections for some
-    def get_names(self):
-        return [n for n in dir(self.__class__) if n not in self.__hidden_methods]
-
-
     def __init__(self):
         cmd.Cmd.__init__(self)
         readline.set_completer_delims(' ')
+        self.usePrettyTable = True
 
         self.intro = '\nType help or ? to list commands.\n'
         self.prompt = prompt
@@ -381,60 +366,77 @@ class G2CmdShell(cmd.Cmd):
         self.validMatchLevelParameters['A'] = 'AMBIGUOUS_MATCH_SAMPLE'
         self.validMatchLevelParameters['P'] = 'POSSIBLE_MATCH_SAMPLE'
         self.validMatchLevelParameters['R'] = 'POSSIBLY_RELATED_SAMPLE'
-        self.lastSearchResult = []
-        self.usePrettyTable = True
-        self.currentReviewList = None
 
         #--get settings
         settingsFileName = '.' + os.path.basename(sys.argv[0].lower().replace('.py','')) + '_settings'
 
         self.settingsFileName = os.path.join(os.path.expanduser("~"), settingsFileName)
-        try: self.settingsFileData = json.load(open(self.settingsFileName))
-        except: self.settingsFileData = {}
-
-        #--set the color scheme
-        self.colors = {}
-        if not ('colorScheme' in self.settingsFileData and self.settingsFileData['colorScheme'].upper() in ('DARK', 'LIGHT')):
-            self.settingsFileData['colorScheme'] = 'dark'
-        self.do_setColorScheme(self.settingsFileData['colorScheme'])
+        try: self.current_settings = json.load(open(self.settingsFileName))
+        except: self.current_settings = {}
 
         #--default last snapshot/audit file from parameters
         if args.snapshot_file_name:
-            self.settingsFileData['snapshotFile'] = args.snapshot_file_name
+            self.current_settings['snapshotFile'] = args.snapshot_file_name
         if args.audit_file_name:
-            self.settingsFileData['auditFile'] = args.audit_file_name
+            self.current_settings['auditFile'] = args.audit_file_name
 
         #--load prior snapshot file
-        if 'snapshotFile' in self.settingsFileData and os.path.exists(self.settingsFileData['snapshotFile']):
-            self.do_load(self.settingsFileData['snapshotFile'])
+        if 'snapshotFile' in self.current_settings and os.path.exists(self.current_settings['snapshotFile']):
+            self.do_load(self.current_settings['snapshotFile'])
         else:
             self.snapshotFile = None
             self.snapshotData = {}
 
         #--load prior audit file
-        if 'auditFile' in self.settingsFileData and os.path.exists(self.settingsFileData['auditFile']):
-            self.do_load(self.settingsFileData['auditFile'])
+        if 'auditFile' in self.current_settings and os.path.exists(self.current_settings['auditFile']):
+            self.do_load(self.current_settings['auditFile'])
         else:
             self.auditFile = None
             self.auditData = {}
 
         #--default settings for data and cross sources summary reports
-        self.settingsFileData['dataSourceSupression'] = self.settingsFileData.get('dataSourceSupression', True)
-        self.settingsFileData['statisticLevel'] = self.settingsFileData.get('statisticLevel', 'RECORD')
+        self.configurable_settings_list = [
+            {'setting': 'color_scheme', 'values': ['light', 'dark'], 'description': 'light works better on dark backgrounds and vice-versa'}, 
+            {'setting': 'statistic_level', 'values': ['record', 'entity'], 'description': 'sets the statistical point of view of the data and crossSourceSummary reports'}, 
+            {'setting': 'data_source_suppression', 'values': ['off', 'on'], 'description': 'restricts the data and crossSourceSummary reports to only applicable data sources'},
+            {'setting': 'show_relations_on_get', 'values': ['off', 'on'], 'description': 'always display relationships if any with each get of an entity ... or not!'}
+        ]
+        for setting_data in self.configurable_settings_list:
+            self.current_settings[setting_data['setting']] = self.current_settings.get(setting_data['setting'], setting_data['values'][0])
+
+        #--set the color scheme
+        self.colors = {}
+        self.do_set(f"color_scheme {self.current_settings['color_scheme']}")
+
+        self.lastSearchResult = []
+        self.currentReviewList = None
 
         #--history
         self.readlineAvail = True if 'readline' in sys.modules else False
         self.histDisable = hist_disable
         self.histCheck()
 
+    #Hide functions from available list of Commands. Seperate help sections for some
+    def get_names(self):
+        return [n for n in dir(self.__class__) if n not in self.__hidden_methods]
+
+    #Override function from cmd module to make command completion case insensitive
+    def completenames(self, text, *ignored):
+        dotext = 'do_'+text
+        return  [a[3:] for a in self.get_names() if a.lower().startswith(dotext.lower())]
+
+    # -----------------------------
+    def emptyline(self):
+        return
 
     # -----------------------------
     def do_quit(self, arg):
         return True
 
     # -----------------------------
-    def emptyline(self):
-        return
+    def do_exit(self, arg):
+        self.do_quit(self)
+        return True
 
     # -----------------------------
     def cmdloop(self):
@@ -455,12 +457,8 @@ class G2CmdShell(cmd.Cmd):
     def postloop(self):
         try:
             with open(self.settingsFileName, 'w') as f:
-                json.dump(self.settingsFileData, f)
+                json.dump(self.current_settings, f)
         except: pass
-
-    #Hide do_shell from list of APIs. Seperate help section for it
-    def get_names(self):
-        return [n for n in dir(self.__class__) if n not in self.__hidden_methods]
 
     def help_KnowledgeCenter(self):
         printWithNewLines('Senzing Knowledge Center: https://senzing.zendesk.com/hc/en-us', 'B')
@@ -588,34 +586,52 @@ class G2CmdShell(cmd.Cmd):
         else:
             printWithNewLines('History isn\'t available in this session.', 'B')
 
-# ===== global commands =====
-
+    # -----------------------------
     def do_shell(self,line):
         '\nRun OS shell commands: !<command>\n'
         output = os.popen(line).read()
-        printWithNewLines(output, 'B')
+        print(f"\n{output}\n")
 
     # -----------------------------
-    #def do_version (self,arg):
-    #    printWithNewLines('POC Utilities version %s' % pocUtilsVersion, 'B')
+    def help_set (self):
+        print(textwrap.dedent(f'''\
+
+            {colorize('syntax:', self.colors['highlight1'])} 
+                set <setting> <value> 
+
+            {colorize('settings:', self.colors['highlight1'])} '''))
+        print(colorize(f"    {'setting':<25} {'[possible values]':<20} {'current':<11} {'description'}", 'bold'))
+        for setting_data in self.configurable_settings_list:
+            current_value = colorize(self.current_settings[setting_data['setting']], self.colors['highlight2'])
+            print(f"    {setting_data['setting']:<25} {'[' + ', '.join(setting_data['values']) + ']':<20} {current_value:<20} {setting_data['description']}")
+        print()
 
     # -----------------------------
-    def do_setColorScheme (self,arg):
-        '\nSets the color scheme lighter or darker. Darker works better on lighter backgrounds and vice-versa.' \
-        '\n\nSyntax:' \
-        '\n\tsetColorScheme dark' \
-        '\n\tsetColorScheme light\n'
-
-        if not argCheck('do_setColorScheme', arg, self.do_setColorScheme.__doc__):
-            printWithNewLines('colorScheme set to ' + self.settingsFileData['colorScheme'], 'B')
+    def do_set(self,arg):
+        if not arg:
+            self.help_set()
             return
 
-        arg = arg.upper()
+        settings_dict = {}
+        for setting_data in self.configurable_settings_list:
+            settings_dict[setting_data['setting']] = setting_data['values']
 
-        #--best for dark backgrounds
+        arg_list = arg.split()
+        if len(arg_list) != 2 or (arg_list[0] not in settings_dict) or (arg_list[1] not in settings_dict[arg_list[0]]):
+            print('['+arg_list[0]+']', arg_list[0] in [item['setting'] for item in self.configurable_settings_list])
+            print(colorize('\ninvalid syntax or settings\n', 'fg.red'))
+            self.help_set()
+            return
+
+        self.current_settings[arg_list[0]] = arg_list[1]
+        if arg_list[0] == 'color_scheme':
+            self.set_color_scheme(arg_list[1])
+
+    # -----------------------------
+    def set_color_scheme(self,arg):
         self.colors['none'] = None
-        if arg == 'LIGHT':
-            self.settingsFileData['colorScheme'] = 'light'
+        if arg.upper() == 'LIGHT':
+            self.current_settings['colorScheme'] = 'light'
             self.colors['entityTitle'] = 'fg.lightmagenta'
             self.colors['entityColumns'] = 'bg.lightblack,fg.white'
             self.colors['tableTitle'] = 'fg.lightblue'
@@ -630,8 +646,8 @@ class G2CmdShell(cmd.Cmd):
             self.colors['highlight2'] = 'fg.lightmagenta'
 
         #--best for light backgrounds
-        elif arg == 'DARK':
-            self.settingsFileData['colorScheme'] = 'dark'
+        elif arg.upper() == 'DARK':
+            self.current_settings['colorScheme'] = 'dark'
             self.colors['entityTitle'] = 'fg.magenta'
             self.colors['entityColumns'] = 'bg.lightblack,fg.white'
             self.colors['tableTitle'] = 'fg.blue'
@@ -644,18 +660,6 @@ class G2CmdShell(cmd.Cmd):
             self.colors['caution'] = 'fg.yellow'
             self.colors['highlight1'] = 'fg.cyan'
             self.colors['highlight2'] = 'fg.magenta'
-        else:
-            printWithNewLines('Color scheme %s not valid!' % (arg), 'B')
-            return
-
-    # -----------------------------
-    def do_toggle_dataSourceSuppression (self, arg):
-        if self.settingsFileData['dataSourceSupression']:
-            self.settingsFileData['dataSourceSupression'] = False 
-            printWithNewLines('dataSourceSupression is now OFF', 'B')
-        else:
-            self.settingsFileData['dataSourceSupression'] = True 
-            printWithNewLines('dataSourceSupression is now ON', 'B')
 
     # -----------------------------
     def do_versions (self,arg):
@@ -689,12 +693,12 @@ class G2CmdShell(cmd.Cmd):
             return
 
         if 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Snapshot'): #--'pocSnapshot', 
-            self.settingsFileData['snapshotFile'] = statpackFileName
+            self.current_settings['snapshotFile'] = statpackFileName
             self.snapshotFile = statpackFileName
             self.snapshotData = jsonData
             printWithNewLines('%s sucessfully loaded!' % statpackFileName, 'B')
         elif 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Audit'): #--'pocAudit', 
-            self.settingsFileData['auditFile'] = statpackFileName
+            self.current_settings['auditFile'] = statpackFileName
             self.auditFile = statpackFileName
             self.auditData = jsonData
             printWithNewLines('%s sucessfully loaded!' % statpackFileName, 'B')
@@ -735,7 +739,7 @@ class G2CmdShell(cmd.Cmd):
     def do_quickLook (self,arg):
         '\nDisplays current data source stats without a snapshot'
 
-        g2_diagnostic_module = G2Diagnostic.G2Diagnostic()
+        g2_diagnostic_module = G2Diagnostic()
         if apiVersion['VERSION'][0:1] == '2':
             g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
         else: #--eventually deprecate the above
@@ -745,7 +749,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray() 
             g2_diagnostic_module.getDataSourceCounts(response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(err)
         jsonResponse = json.loads(response)
 
@@ -1097,7 +1101,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print('\n' + str(err) + '\n')
                 return -1 if calledDirect else 0
 
@@ -1473,7 +1477,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.getEntityByEntityIDV2(int(entityID), g2Engine.G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return sampleRecord
         try: jsonData = json.loads(response)
@@ -1555,7 +1559,7 @@ class G2CmdShell(cmd.Cmd):
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['ENTITY_COUNT']) if 'ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(self.snapshotData['DATA_SOURCES'][dataSource]['COMPRESSION'] if 'COMPRESSION' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['SINGLE_COUNT']) if 'SINGLE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                if self.settingsFileData['statisticLevel'] == 'RECORD':
+                if self.current_settings['statistic_level'] == 'record':
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('DUPLICATE_RECORD_COUNT', 0)))
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('AMBIGUOUS_MATCH_RECORD_COUNT', 0)))
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('POSSIBLE_MATCH_RECORD_COUNT', 0)))
@@ -1704,7 +1708,7 @@ class G2CmdShell(cmd.Cmd):
         '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships\n'
  
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
-            printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
+            print('\nPlease load a json file created with G2Snapshot.py to use this command\n')
             return
 
         #--display the summary if no arguments
@@ -1733,8 +1737,7 @@ class G2CmdShell(cmd.Cmd):
                     row.append(colorize(dataSource1, self.colors['datasource']))
                     row.append(colorize(dataSource2, self.colors['datasource']))
 
-                    cross_stat_level = 'RECORD'
-                    if cross_stat_level == 'RECORD':
+                    if self.current_settings['statistic_level'] == 'record':
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_RECORD_COUNT']) if 'MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_RECORD_COUNT']) if 'AMBIGUOUS_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLE_MATCH_RECORD_COUNT']) if 'POSSIBLE_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
@@ -1931,7 +1934,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.searchByAttributesV2(json.dumps(searchJson), searchFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print(json.dumps(searchJson, indent=4))
                 print(str(err))
                 return
@@ -2111,7 +2114,7 @@ class G2CmdShell(cmd.Cmd):
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
 
         #--get possible data source list
-        if 'dataSourceFilter' in kwargs and self.settingsFileData['dataSourceSupression']:
+        if 'dataSourceFilter' in kwargs and self.current_settings['data_source_suppression'] == 'on':
             dataSourceFilter = kwargs['dataSourceFilter']
         else:
             dataSourceFilter = None
@@ -2157,7 +2160,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(arg), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print('\n' + str(err) + '\n')
                 return -1 if calledDirect else 0
 
@@ -2167,7 +2170,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByRecordIDV2(arg.split()[0], arg.split()[1], getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print('\n' + str(err) + '\n')
                 return -1 if calledDirect else 0
         else:
@@ -2242,7 +2245,7 @@ class G2CmdShell(cmd.Cmd):
             #    tblTitle += ' ' + colorize('** additionalDataSources **', 'blink'q)
 
             #--display if no relationships
-            if relatedEntityCount == 0:
+            if relatedEntityCount == 0 or self.current_settings['show_relations_on_get'] == 'off':
                 self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'])
                 return 0
 
@@ -2445,7 +2448,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return None
         jsonData2 = json.loads(response)
@@ -2480,7 +2483,7 @@ class G2CmdShell(cmd.Cmd):
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
 
         #--get possible data source list
-        if 'dataSourceFilter' in kwargs and self.settingsFileData['dataSourceSupression']:
+        if 'dataSourceFilter' in kwargs and self.current_settings['data_source_suppression'] == 'on':
             dataSourceFilter = kwargs['dataSourceFilter']
         else:
             dataSourceFilter = None
@@ -2532,7 +2535,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print('\n' + str(err) + '\n')
                 return -1 if calledDirect else 0
             else:
@@ -2780,7 +2783,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.findNetworkByEntityIDV2(entityParameter, maxDegree, buildOutDegree, maxEntities, getFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(f'\n{err}\n')
             return
         if debugOutput:
@@ -3165,7 +3168,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.whyEntityByEntityIDV2(int(entityList[0]), whyFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print('\n' + str(err) + '\n')
             return None
         if len(response) == 0:
@@ -3203,7 +3206,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.whyRecordsV2(entityList[0], entityList[1], entityList[2], entityList[3], whyFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print('\n' + str(err) + '\n')
             return None 
         if len(response) == 0:
@@ -3268,7 +3271,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.whyEntitiesV2(int(entityList[0]), int(entityList[1]), whyFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print('\n' + str(err) + '\n')
             return None 
         if len(response) == 0:
@@ -3357,7 +3360,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.whyEntityByEntityIDV2(int(entityId), whyFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print('\n' + str(err) + '\n')
                 return None
             jsonData = json.loads(response)
@@ -3421,7 +3424,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print(str(err))
                 return
             jsonData2 = json.loads(response)
@@ -3454,7 +3457,7 @@ class G2CmdShell(cmd.Cmd):
                 response = bytearray()
                 retcode = g2Engine.searchByAttributesV2(json.dumps(searchJson), searchFlagBits, response)
                 response = response.decode() if response else ''
-            except G2Exception.G2Exception as err:
+            except G2Exception as err:
                 print(json.dumps(searchJson, indent=4))
                 print(str(err))
                 return
@@ -3865,7 +3868,7 @@ class G2CmdShell(cmd.Cmd):
             response = bytearray()
             retcode = g2Engine.getEntityByEntityIDV2(int(arg), getFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print('\n' + str(err) + '\n')
             return -1 if calledDirect else 0
         json_data = json.loads(response)
@@ -3891,7 +3894,7 @@ class G2CmdShell(cmd.Cmd):
                 feature_data = features_by_record[recordData['DATA_SOURCE']][recordData['RECORD_ID']][lib_feat_id]
                 ftype_id = feature_data['ftypeId']
                 counter_display = self.feature_counter_display(feature_data)
-                feat_desc = f"{lib_feat_id}:{feature_data['featDesc']} {counter_display}"
+                feat_desc = f"{colorize(lib_feat_id, 'dim')}: {feature_data['featDesc']} {counter_display}"
 
                 if ftype_id not in stat_pack['features']:
                     stat_pack['features'][ftype_id] = {}
@@ -3911,13 +3914,13 @@ class G2CmdShell(cmd.Cmd):
                 else:
                     stat_pack['features'][ftype_id][feat_desc] += 1
 
-        howFlagList = ['G2_HOW_ENTITY_DEFAULT_FLAGS', 'G2_INCLUDE_FEATURE_SCORES']
+        howFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS', 'G2_SEARCH_INCLUDE_FEATURE_SCORES']
         howFlagBits = self.computeApiFlags(howFlagList)
         try:
             response = bytearray()
             retcode = g2Engine.howEntityByEntityIDV2(entityId, howFlagBits, response)
             response = response.decode() if response else ''
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print('\n' + str(err) + '\n')
             return -1 if calledDirect else 0
         if len(response) == 0:
@@ -4120,7 +4123,7 @@ class G2CmdShell(cmd.Cmd):
                 colored_virtual_id1 = colorize(step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
                 colored_virtual_id2 = colorize(step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
 
-                if how_display_level == 'brief':
+                if 'brief' in how_display_level:
                     step_node.node_text = f"{colored_virtual_id1} {step_data[left_virtual_entity]['colored_desc']} {step_data[left_virtual_entity]['entity_name']}"
                     if not step_data['step_type'].startswith('Add'):
                         step_node.node_text += f"\n{colored_virtual_id2} {step_data[right_virtual_entity]['colored_desc']} {step_data[right_virtual_entity]['entity_name']}"
@@ -4208,52 +4211,46 @@ class G2CmdShell(cmd.Cmd):
         statistics_node.node_desc = colorize('STATISTICS', 'bold')
 
         summary_node = Node('SUMMARY')
-        summary_node.node_desc = colorize('SUMMARY', self.colors['highlight2'])
+        summary_node.node_desc = self.how_format_statistic_header('SUMMARY')
         statistics_node.add_child(summary_node)
 
-        item_node = Node('tot_records')
-        item_node.node_desc = 'Total record count ' + colorize('(' + str(total_record_count) + ')', self.colors['highlight1'])
-        summary_node.add_child(item_node)
-
-        item_node = Node('tot_features')
-        item_node.node_desc = 'Total feature count ' + colorize('(' + str(total_feature_count) + ')', self.colors['highlight1'])
-        summary_node.add_child(item_node)
-
-        item_node = Node('tot_entities')
-        item_node.node_desc = 'Final entity count' + colorize('(' + str(len(root_node.children)) + ')', self.colors['highlight1'])
-        summary_node.add_child(item_node)
+        for stat_data in [['Total record count', total_record_count], 
+                          ['Total feature count', total_feature_count], 
+                          ['Final entity count', len(root_node.children)]]:
+            item_node = Node(stat_data[0])
+            item_node.node_desc= self.how_format_statistic(stat_data[0], stat_data[1])
+            summary_node.add_child(item_node)
 
         category_node = Node('steps')
-        category_node.node_desc = 'Resolution steps ' + colorize('(' + str(step_count) + ')', self.colors['highlight1'])
+        category_node.node_desc = self.how_format_statistic('Resolution steps', step_count)
         summary_node.add_child(category_node)
         for item in stat_pack['steps']:
             item_node = Node(item)
-            item_cnt = colorize(f"({stat_pack['steps'][item]})", self.colors['highlight1'])
-            item_node.node_desc = colorize(f"{item} {item_cnt})", 'italics')
+            item_node.node_desc = colorize(self.how_format_statistic(item, stat_pack['steps'][item]), 'italics')
             category_node.add_child(item_node)
 
         category_node = Node('rules')
-        category_node.node_desc = colorize('PRINCIPLES', self.colors['highlight2'])
+        category_node.node_desc = colorize('PRINCIPLES', self.colors['highlight1'])
         statistics_node.add_child(category_node)
         for rule_info in sorted(stat_pack['rule_counter'].items() , key=lambda item: item[1],reverse=True):
             rule = rule_info[0]
             rule_node = Node(rule)
-            rule_cnt = colorize(f"({rule_info[1]})", self.colors['highlight1'])
+            rule_cnt = colorize(f"({rule_info[1]})", self.colors['highlight2'])
             rule_node.node_desc = f"{rule} {rule_cnt}"
             category_node.add_child(rule_node)
             for match_key_info in sorted(stat_pack['rules'][rule].items() , key=lambda item: item[1],reverse=True):
                 match_key = match_key_info[0]
                 match_key_node = Node(match_key)
-                match_key_cnt = colorize(f"({match_key_info[1]})", self.colors['highlight1'])
+                match_key_cnt = colorize(f"({match_key_info[1]})", self.colors['highlight2'])
                 match_key_node.node_desc = f"{match_key} {match_key_cnt}"
                 rule_node.add_child(match_key_node)
 
         category_node = Node('features')
-        category_node.node_desc = colorize('FEATURES', self.colors['highlight2'])
+        category_node.node_desc = colorize('FEATURES', self.colors['highlight1'])
         statistics_node.add_child(category_node)
         for ftype_id in sorted(stat_pack['features'], key=lambda k: self.featureSequence[k]):
             ftype_node = Node(ftype_id)
-            ftype_cnt = colorize(f"({stat_pack['ftype_counter'][ftype_id]['featureCount']})", self.colors['highlight1'])
+            ftype_cnt = colorize(f"({stat_pack['ftype_counter'][ftype_id]['featureCount']})", self.colors['highlight2'])
             ftype_node.node_desc = f"{colorize(self.ftypeLookup[ftype_id]['FTYPE_CODE'], self.colors['rowtitle'])} {ftype_cnt}"
             category_node.add_child(ftype_node)
             feat_desc_info_list = sorted(stat_pack['features'][ftype_id].items() , key=lambda item: item[1],reverse=True)
@@ -4263,7 +4260,7 @@ class G2CmdShell(cmd.Cmd):
                 if cnt in (1, 2, len(feat_desc_info_list), len(feat_desc_info_list)-1):
                     feat_desc = feat_desc_info[0]
                     feat_node = Node(feat_desc)
-                    feat_cnt = colorize(f"({feat_desc_info[1]})", self.colors['highlight1'])
+                    feat_cnt = colorize(f"({feat_desc_info[1]})", self.colors['highlight2'])
                     if any(i in feat_desc for i in ['[~','[!','[#']):
                         feat_desc = colorize(feat_desc, 'dim')
                     feat_node.node_desc = f"{feat_desc} {feat_cnt}"
@@ -4345,6 +4342,15 @@ class G2CmdShell(cmd.Cmd):
         return virtual_entity_data
 
     # -----------------------------
+    def how_format_statistic_header(self, header):
+        return colorize(header, self.colors['highlight1'])
+
+    # -----------------------------
+    def how_format_statistic(self, stat, cnt):
+        return stat + ' ' + colorize('(' + str(cnt) + ')', self.colors['highlight2'])
+
+
+    # -----------------------------
     def do_score(self, arg): 
         '\nCompares any two features and shows the scores returned.\n' \
         '\nSyntax:' \
@@ -4372,7 +4378,7 @@ class G2CmdShell(cmd.Cmd):
         try: 
             retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_1', json.dumps(record1json))
             retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_2', json.dumps(record2json))
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return
 
@@ -4382,7 +4388,7 @@ class G2CmdShell(cmd.Cmd):
         try: 
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_1')
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_2')
-        except G2Exception.G2Exception as err:
+        except G2Exception as err:
             print(str(err))
             return
 
@@ -4579,7 +4585,7 @@ class G2CmdShell(cmd.Cmd):
                     response = bytearray()
                     retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
                     response = response.decode() if response else ''
-                except G2Exception.G2Exception as err:
+                except G2Exception as err:
                     print('\n' + str(err) + '\n')
                 if debugOutput:
                     showApiDebug('get', apiCall, getFlagList, json.loads(response) if response else '{}')
@@ -4600,7 +4606,6 @@ class G2CmdShell(cmd.Cmd):
                 currentEntityList = nextEntityList
             else:
                 break
-
 
         f.close
 
@@ -4663,11 +4668,24 @@ class G2CmdShell(cmd.Cmd):
         return False 
 
     # -----------------------------
-    def computeApiFlags(self, flagList):
+    def computeApiFlagsx(self, flagList):
             flagBits = 0
             for flagName in flagList:
-                flagBits = flagBits | getattr(g2Engine, flagName)
+                if apiVersion['VERSION'][0:1] > '2':
+                    flagBits = flagBits | getattr(G2EngineFlags, flagName)
+                else:
+                    flagBits = flagBits | getattr(g2Engine, flagName)
             return flagBits
+
+    # -----------------------------
+    def computeApiFlags(self, flagList):
+            if apiVersion['VERSION'][0:1] > '2':
+                return G2EngineFlags.combine_flags(flagList)
+            else:
+                flagBits = 0
+                for flagName in flagList:
+                    flagBits = flagBits | getattr(g2Engine, flagName)
+                return flagBits
 
 # ===== utility functions =====
 
@@ -4885,29 +4903,28 @@ if __name__ == '__main__':
 
     #--get the version information
     try: 
-        g2Product = G2Product.G2Product()
+        g2Product = G2Product()
         apiVersion = json.loads(g2Product.version())
-    except G2Exception.G2Exception as err:
+    except G2Exception as err:
         print(err)
         sys.exit(1)
-    g2Product.destroy()
 
     #--try to initialize the g2engine
     try:
-        g2Engine = G2Engine.G2Engine()
-        iniParamCreator = G2IniParams.G2IniParams()
+        g2Engine = G2Engine()
+        iniParamCreator = G2IniParams()
         iniParams = iniParamCreator.getJsonINIParams(iniFileName)
         if apiVersion['VERSION'][0:1] == '2':
-            g2Engine.initV2('G2Snapshot', iniParams, False)
+            g2Engine.initV2('G2Explorer', iniParams, False)
         else: #--eventually deprecate the above
-            g2Engine.init('G2Snapshot', iniParams, False)
-    except G2Exception.G2Exception as err:
+            g2Engine.init('G2Explorer', iniParams, False)
+    except G2Exception as err:
         print('\n%s\n' % str(err))
         sys.exit(1)
 
     #--get needed config data
     try: 
-        g2ConfigMgr = G2ConfigMgr.G2ConfigMgr()
+        g2ConfigMgr = G2ConfigMgr()
         if apiVersion['VERSION'][0:1] == '2':
             g2ConfigMgr.initV2('pyG2ConfigMgr', iniParams, False)
         else: #--eventually deprecate the above
