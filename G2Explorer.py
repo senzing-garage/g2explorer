@@ -2381,7 +2381,7 @@ class G2CmdShell(cmd.Cmd):
             return -1 if calledDirect else 0
         jsonData = json.loads(response)
 
-        g2_diagnostic_module = G2Diagnostic.G2Diagnostic()
+        g2_diagnostic_module = G2Diagnostic()
         if apiVersion['VERSION'][0:1] == '2':
             g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
         else: #--eventually deprecate the above
