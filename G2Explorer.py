@@ -2191,6 +2191,78 @@ class G2CmdShell(cmd.Cmd):
         return recordData, entityData, otherData
 
     # -----------------------------
+    def getFeatures(self, entityID):
+
+        getFlagList = []
+        getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
+        getFlagBits = self.computeApiFlags(getFlagList)
+
+        apiCall = f'getEntityByEntityIDV2({entityID}, {getFlagBits}, response)' 
+        try: 
+            response = bytearray()
+            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), getFlagBits, response)
+            response = response.decode() if response else ''
+        except G2Exception as err:
+            printWithNewLines(str(err), 'B')
+            return -1 if calledDirect else 0
+
+        if debugOutput:
+            showApiDebug('get', apiCall, getFlagList, json.loads(response) if response else '{}')
+
+        if len(response) == 0:
+            printWithNewLines('0 records found %s' % response, 'B')
+            return -1 if calledDirect else 0
+        jsonData = json.loads(response)
+
+        g2_diagnostic_module = G2Diagnostic.G2Diagnostic()
+        if apiVersion['VERSION'][0:1] == '2':
+            g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
+        else: #--eventually deprecate the above
+            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
+
+        #--get the features in order
+        orderedFeatureList = []
+        for ftypeId in self.featureSequence: #sorted(featureArray, key=lambda k: self.featureSequence[k]):
+            ftypeCode = self.ftypeLookup[ftypeId]['FTYPE_CODE']
+            for distinctFeatureData in jsonData['RESOLVED_ENTITY']['FEATURES'].get(ftypeCode,[]):
+                for featureData in distinctFeatureData['FEAT_DESC_VALUES']:
+                    usageType = featureData.get('USAGE_TYPE')
+                    orderedFeatureList.append({'ftypeCode': ftypeCode, 
+                                               'usageType': distinctFeatureData.get('USAGE_TYPE'), 
+                                               'featureDesc': featureData.get('FEAT_DESC'),
+                                               'libFeatId': featureData['LIB_FEAT_ID']})
+        tblRows = []
+        for libFeatData in orderedFeatureList:
+            ftypeCode = libFeatData['ftypeCode']
+            usageType = libFeatData['usageType']
+            libFeatId = libFeatData['libFeatId']
+            featureDesc = libFeatData['featureDesc']
+
+            try: 
+                response = bytearray() 
+                g2_diagnostic_module.getFeature(libFeatId, response)
+                response = response.decode() if response else ''
+            except G2Exception as err:
+                print(err)
+            jsonData = json.loads(response)
+
+            ftypeDisplay = ftypeCode + (' (' + usageType + ')' if usageType else '')
+            ftypeDisplay += '\n  ' + colorize(f'id: {libFeatId}', 'dim')
+
+            #--standardize the order of the attributes
+            for i in range(len(jsonData['ELEMENTS'])):
+                attrRecord = self.ftypeAttrLookup[ftypeCode].get(jsonData['ELEMENTS'][i]['FELEM_CODE'])
+                attrId = attrRecord['ATTR_ID'] if attrRecord else 9999999
+                jsonData['ELEMENTS'][i]['ATTR_ID'] = attrId
+
+            felemDisplayList = []
+            for elementData in sorted(sorted(jsonData['ELEMENTS'], key=lambda k: (k['FELEM_CODE'])), key=lambda k: (k['ATTR_ID'])):
+                felemDisplayList.append(colorize(elementData['FELEM_CODE'], self.colors['highlight1']) + ': ' +  elementData['FELEM_VALUE'])
+
+            tblRows.append([ftypeDisplay, featureDesc, '\n'.join(felemDisplayList)])
+        return tblRows
+
+    # -----------------------------
     def getAmbiguousEntitySet(self, entityId):
         #--get other ambiguous relationships if this is the ambiguous entity
         getFlagList = []
