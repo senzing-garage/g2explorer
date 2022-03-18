@@ -1475,7 +1475,7 @@ class G2CmdShell(cmd.Cmd):
         #--get the entity
         try: 
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), g2Engine.G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES, response)
+            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), self.computeApiFlags(['G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES']), response)
             response = response.decode() if response else ''
         except G2Exception as err:
             print(str(err))
@@ -3975,32 +3975,33 @@ class G2CmdShell(cmd.Cmd):
 
         #--start from the end and combine the prior steps that just add another singleton 
         render_node_list = []
-        for final_virtual_data in json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']:
-            final_virtual_id = final_virtual_data['VIRTUAL_ENTITY_ID']
-            render_node_list.append({'node_id': final_virtual_id, 'parent_node': 'root'})
+        if json_data['HOW_RESULTS']['RESOLUTION_STEPS']: #--bypass if no resolution steps taken
+            for final_virtual_data in json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']:
+                final_virtual_id = final_virtual_data['VIRTUAL_ENTITY_ID']
+                render_node_list.append({'node_id': final_virtual_id, 'parent_node': 'root'})
 
-            current_aggregate_list = [final_virtual_id]
-            while current_aggregate_list:
-                current_node_id = current_aggregate_list[-1]
+                current_aggregate_list = [final_virtual_id]
+                while current_aggregate_list:
+                    current_node_id = current_aggregate_list[-1]
 
-                #--keep going down chain until two singletons or two aggregates
-                aggregate_node_id = current_node_id
-                while True:
-                    prior_step = aggregate_nodes[aggregate_node_id]['final_step']
-                    aggregate_nodes[current_node_id]['all_steps'].append(prior_step)
-                    if len(resolution_steps[prior_step]['aggregate_nodes']) == 1: 
-                        aggregate_node_id = resolution_steps[prior_step]['aggregate_nodes'][0]
-                    else:
-                        break
+                    #--keep going down chain until two singletons or two aggregates
+                    aggregate_node_id = current_node_id
+                    while True:
+                        prior_step = aggregate_nodes[aggregate_node_id]['final_step']
+                        aggregate_nodes[current_node_id]['all_steps'].append(prior_step)
+                        if len(resolution_steps[prior_step]['aggregate_nodes']) == 1: 
+                            aggregate_node_id = resolution_steps[prior_step]['aggregate_nodes'][0]
+                        else:
+                            break
 
-                #--done with this aggregate
-                current_aggregate_list.pop()
+                    #--done with this aggregate
+                    current_aggregate_list.pop()
 
-                #--if ended on step with two aggregates, each must be traversed
-                if len(resolution_steps[prior_step]['aggregate_nodes']) == 2:
-                    for aggregate_node_id in resolution_steps[prior_step]['aggregate_nodes']:
-                        current_aggregate_list.append(aggregate_node_id)
-                        render_node_list.append({'node_id': aggregate_node_id, 'parent_node': current_node_id})
+                    #--if ended on step with two aggregates, each must be traversed
+                    if len(resolution_steps[prior_step]['aggregate_nodes']) == 2:
+                        for aggregate_node_id in resolution_steps[prior_step]['aggregate_nodes']:
+                            current_aggregate_list.append(aggregate_node_id)
+                            render_node_list.append({'node_id': aggregate_node_id, 'parent_node': current_node_id})
 
         #--start rendering nodes
         root_node = Node('root')
@@ -4279,7 +4280,7 @@ class G2CmdShell(cmd.Cmd):
         if how_display_level != 'brief':
             how_report += '\n' + statistics_node.render_tree() 
  
-        if how_display_level != 'stats':
+        if how_display_level != 'stats' and root_node.children:  #--will be no children if singleton
             root_node.node_desc = 'RESOLUTION STEPS'
             how_report += '\n' + root_node.render_tree()
             #how_report += '\n' + colorize('RESOLUTION STEPS', 'bold')
