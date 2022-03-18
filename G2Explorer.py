@@ -684,26 +684,26 @@ class G2CmdShell(cmd.Cmd):
 
         statpackFileName = arg
         if not os.path.exists(statpackFileName):
-            printWithNewLines('file %s not found!' % (statpackFileName), 'B')
+            print('\nfile not found!\n')
             return
 
         try: jsonData = json.load(open(statpackFileName), encoding="utf-8")
-        except:
-            printWithNewLines('Invalid json in %s' % statpackFileName, 'B')
+        except ValueError as err:
+            print(f"\nError in {statpackFileName} ...\n\t{err}\n")
             return
 
         if 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Snapshot'): #--'pocSnapshot', 
             self.current_settings['snapshotFile'] = statpackFileName
             self.snapshotFile = statpackFileName
             self.snapshotData = jsonData
-            printWithNewLines('%s sucessfully loaded!' % statpackFileName, 'B')
+            print(f"\nsucessfully loaded {statpackFileName}\n")
         elif 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Audit'): #--'pocAudit', 
             self.current_settings['auditFile'] = statpackFileName
             self.auditFile = statpackFileName
             self.auditData = jsonData
-            printWithNewLines('%s sucessfully loaded!' % statpackFileName, 'B')
+            print(f"\nsucessfully loaded {statpackFileName}\n")
         else:
-            printWithNewLines('Invalid statistics file %s' % statpackFileName, 'B')
+            print('\ninvalid G2Explorer statistics file\n')
 
     # -----------------------------
     def complete_load(self, text, line, begidx, endidx):
@@ -2381,7 +2381,7 @@ class G2CmdShell(cmd.Cmd):
             return -1 if calledDirect else 0
         jsonData = json.loads(response)
 
-        g2_diagnostic_module = G2Diagnostic.G2Diagnostic()
+        g2_diagnostic_module = G2Diagnostic()
         if apiVersion['VERSION'][0:1] == '2':
             g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
         else: #--eventually deprecate the above
