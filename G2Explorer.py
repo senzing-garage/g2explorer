@@ -3914,7 +3914,7 @@ class G2CmdShell(cmd.Cmd):
                 else:
                     stat_pack['features'][ftype_id][feat_desc] += 1
 
-        howFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS', 'G2_SEARCH_INCLUDE_FEATURE_SCORES']
+        howFlagList = ['G2_HOW_ENTITY_DEFAULT_FLAGS']
         howFlagBits = self.computeApiFlags(howFlagList)
         try:
             response = bytearray()
