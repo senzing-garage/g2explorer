@@ -4108,17 +4108,17 @@ class G2CmdShell(cmd.Cmd):
                 if lowest_score < 90:
                     for step_num in stat_pack['lowest_feature_scores'][ftype_id][lowest_score]:
                         interesting_step_list.append([step_num, f"{ftype_code} scored {lowest_score}"])
-                        cntr += 1
-                    if cntr >= 5:
-                        break
+                    cntr += 1
+                if cntr == 2:
+                    break
         cntr = 0
         for lowest_member_count in sorted(stat_pack['largest_combine_steps'], reverse=True):
             for large_step_info in sorted(stat_pack['largest_combine_steps'][lowest_member_count], key=lambda k: k[1], reverse=True):
                 step_num = large_step_info[0]
                 highest_member_count = large_step_info[1] - lowest_member_count
                 interesting_step_list.append([step_num, f"Combines a group of {lowest_member_count} with a group of {highest_member_count}"])
-                cntr += 1
-            if cntr >= 5:
+            cntr += 1
+            if cntr == 2:
                 break
         if interesting_step_list:
             interesting_step_data = {}
@@ -4420,7 +4420,7 @@ class G2CmdShell(cmd.Cmd):
                 input(f"\n{filter_str} was not found, press any key")
                 filter_str = None
             else:
-                self.currentRenderString = how_header + ('\nFiltered for ' + colorize(filter_str, self.colors['bad']) + '\n' if filter_str else '') + '\n' + how_report
+                self.currentRenderString = how_header + ('\nFiltered for ' + colorize(filter_str, 'fg.white,bg.red') + '\n' if filter_str else '') + '\n' + how_report
 
             if filter_str:
                 self.do_scroll(search=filter_str)
