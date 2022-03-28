@@ -227,13 +227,19 @@ class Node(object):
         self.node_desc = node_id
         self.node_text = None
         self.children = []
+        self.parents = []
 
     def add_child(self, obj):
         self.children.append(obj)
 
-    def render_tree(self):
+    def add_parent(self, obj):
+        self.parents.append(obj)
+
+    def render_tree(self, filter_str = None):
         tree = ''
         tree += (self.node_desc + '\n')
+        if self.node_text:
+            tree += (self.node_text + '\n')
         parents = [{'node': self, 'next_child': 0, 'prior_nodes': [self]}]
         while parents:
             if parents[-1]['next_child'] == len(parents[-1]['node'].children):
@@ -246,18 +252,32 @@ class Node(object):
             prefix = ''
             for i in range(len(parents)):
                 if i < len(parents) - 1: #--prior level
-                    prefix += ('    ' if parents[i]['next_child'] == len(parents[i]['node'].children) else '¦   ')
+                    prefix += ('    ' if parents[i]['next_child'] == len(parents[i]['node'].children) else '\u2502   ')
                 else:
-                    prefix += ('+-- ' if parents[i]['next_child'] == len(parents[i]['node'].children) else '+-- ')
+                    prefix += ('\u2514\u2500\u2500 ' if parents[i]['next_child'] == len(parents[i]['node'].children) else '\u251c\u2500\u2500 ')
 
-            tree += (prefix + next_node.node_desc + '\n')
-            if next_node.node_text:
-                if prefix[-4:] == '+-- ':
-                    prefix = prefix[0:-4] + '¦   '
-                elif prefix[-4:] == '+-- ':
+            filter_str_in_desc = False
+            node_desc = next_node.node_desc
+            if node_desc and filter_str:    
+                if filter_str in node_desc:
+                    node_desc = node_desc.replace(filter_str, colorize(filter_str, 'bg.red, fg.white'))
+                    filter_str_in_desc = True
+
+            for line in node_desc.split('\n'):
+                tree += (prefix + line + '\n')
+                if prefix[-4:] == '\u251c\u2500\u2500 ':
+                    prefix = prefix[0:-4] + '\u2502   '
+                elif prefix[-4:] == '\u2514\u2500\u2500 ':
                     prefix = prefix[0:-4] + '    '
 
-                for line in next_node.node_text.split('\n'):
+            if next_node.node_text:
+                node_text = next_node.node_text
+                if filter_str:
+                    if filter_str in node_text:
+                        node_text = node_text.replace(filter_str, colorize(filter_str, 'bg.red, fg.white'))
+                    elif not filter_str_in_desc:
+                        node_text = ''
+                for line in node_text.split('\n'):
                     tree += (prefix + line + '\n')
 
             if next_node not in parents[-1]['prior_nodes'] and next_node.children:
@@ -347,25 +367,24 @@ class G2CmdShell(cmd.Cmd):
         self.doDebug = False
         self.searchMatchLevels = {1: 'Match', 2: 'Possible Match', 3: 'Possibly Related', 4: 'Name Only'}
         self.relatedMatchLevels = {1: 'Ambiguous Match', 2: 'Possible Match', 3: 'Possibly Related', 4: 'Name Only', 11: 'Disclosed Relation'}
-        self.validMatchLevelParameters = {}
-        self.validMatchLevelParameters['0'] = 'SINGLE_SAMPLE'
-        self.validMatchLevelParameters['1'] = 'DUPLICATE_SAMPLE'
-        self.validMatchLevelParameters['2'] = 'AMBIGUOUS_MATCH_SAMPLE'
-        self.validMatchLevelParameters['3'] = 'POSSIBLE_MATCH_SAMPLE'
-        self.validMatchLevelParameters['4'] = 'POSSIBLY_RELATED_SAMPLE'
-        self.validMatchLevelParameters['SINGLE'] = 'SINGLE_SAMPLE'
-        self.validMatchLevelParameters['DUPLICATE'] = 'DUPLICATE_SAMPLE'
-        self.validMatchLevelParameters['MATCH'] = 'DUPLICATE_SAMPLE'
-        self.validMatchLevelParameters['AMBIGUOUS'] = 'AMBIGUOUS_MATCH_SAMPLE'
-        self.validMatchLevelParameters['POSSIBLE'] = 'POSSIBLE_MATCH_SAMPLE'
-        self.validMatchLevelParameters['POSSIBLY'] = 'POSSIBLY_RELATED_SAMPLE'
-        self.validMatchLevelParameters['RELATED'] = 'POSSIBLY_RELATED_SAMPLE'
-        self.validMatchLevelParameters['S'] = 'SINGLE_SAMPLE'
-        self.validMatchLevelParameters['D'] = 'DUPLICATE_SAMPLE'
-        self.validMatchLevelParameters['M'] = 'DUPLICATE_SAMPLE'
-        self.validMatchLevelParameters['A'] = 'AMBIGUOUS_MATCH_SAMPLE'
-        self.validMatchLevelParameters['P'] = 'POSSIBLE_MATCH_SAMPLE'
-        self.validMatchLevelParameters['R'] = 'POSSIBLY_RELATED_SAMPLE'
+        self.validMatchLevelParameters = {'0': 'SINGLE_SAMPLE',
+                                          '1': 'DUPLICATE_SAMPLE',
+                                          '2': 'AMBIGUOUS_MATCH_SAMPLE',
+                                          '3': 'POSSIBLE_MATCH_SAMPLE',
+                                          '4': 'POSSIBLY_RELATED_SAMPLE',
+                                          'S': 'SINGLE_SAMPLE',
+                                          'D': 'DUPLICATE_SAMPLE',
+                                          'M': 'DUPLICATE_SAMPLE',
+                                          'A': 'AMBIGUOUS_MATCH_SAMPLE',
+                                          'P': 'POSSIBLE_MATCH_SAMPLE',
+                                          'R': 'POSSIBLY_RELATED_SAMPLE',
+                                          'SINGLE': 'SINGLE_SAMPLE',
+                                          'DUPLICATE': 'DUPLICATE_SAMPLE',
+                                          'MATCH': 'DUPLICATE_SAMPLE',
+                                          'AMBIGUOUS': 'AMBIGUOUS_MATCH_SAMPLE',
+                                          'POSSIBLE': 'POSSIBLE_MATCH_SAMPLE',
+                                          'POSSIBLY': 'POSSIBLY_RELATED_SAMPLE',
+                                          'RELATED':'POSSIBLY_RELATED_SAMPLE'}
 
         #--get settings
         settingsFileName = '.' + os.path.basename(sys.argv[0].lower().replace('.py','')) + '_settings'
@@ -2869,11 +2888,11 @@ class G2CmdShell(cmd.Cmd):
         #print('----\n', json.dumps(nodes, indent=4), '\n----')
 
         #--create the tree view
-        tree_node_list = {}
+        tree_nodes = {}
 
         root_node = Node(entityId)
         root_node.node_desc = self.entityNodeDesc(nodes, entityId)
-        tree_node_list[entityId] = root_node
+        tree_nodes[entityId] = root_node
 
         current_degree_list = [{'node': root_node, 'entity_id': entityId, 'next_child': 0}]
         while current_degree_list:
@@ -2908,7 +2927,7 @@ class G2CmdShell(cmd.Cmd):
                             for related_id in sorted(nodes[entity_id][category_key][category]):
                                 entity_node = Node(related_id)
                                 entity_node.node_desc = self.entityNodeDesc(nodes, related_id)
-                                tree_node_list[related_id] = entity_node
+                                tree_nodes[related_id] = entity_node
                                 category_node.add_child(entity_node)
 
                                 related_ids_to_build.append(related_id)
@@ -2935,7 +2954,7 @@ class G2CmdShell(cmd.Cmd):
 
             #--start a new list of children if any
             if len(current_degree_list) < buildOutDegree and nodes[related_id]['RELATED_ENTITY_COUNT'] > 0:
-                current_degree_list.append({'node': tree_node_list[related_id], 'entity_id': related_id, 'next_child': 0})
+                current_degree_list.append({'node': tree_nodes[related_id], 'entity_id': related_id, 'next_child': 0})
 
         print()
         print(root_node.render_tree())
@@ -3804,29 +3823,30 @@ class G2CmdShell(cmd.Cmd):
             Shows shows how the records in a single entity came together.
 
             {colorize('Syntax:', self.colors['highlight1'])}
-                how {entity_id}               (shows the stats and brief view)
-                how {entity_id} stats         (shows the stats view)
-                how {entity_id} brief         (shows the brief view)
-                how {entity_id} full          (shows the full entity at each step)
+                how {entity_id}               (shows a summary of the resolution process)
+                how {entity_id} concise       (shows the matching features as part of the tree view)
+                how {entity_id} formatted     (shows the matching features in a table)
 
             {colorize('How to read:', self.colors['highlight1'])}
                 A how report documents each step of the resoution process for an entity so if 
                 an entity has 100s records there will be 100s of steps. Each step will either 
                 create a virtual entity, add to it or combine it with other virtual entities 
-                that may have gotten created along the way.  
+                that were created gotten created along the way.  
 
                 For instance, there may be a set of records (a virtual entity) that match on name 
                 and address and another set that match on name and phone before a record with the 
                 same name, address and phone combines the two virtual entities into one!
 
             {colorize('Pro tip!', self.colors['good'])}
-                The statistics or (stats) section helps you locate key resolution steps based on 
-                the step type, certain principles or match keys, or even by the most or least 
-                common features. Try using the slash (/) key to search for an interesting step,
-                match key or feature found in the statistics section to find out when it happened
-                in the resolution process.
+                The overview section helps you locate interesting resolution steps based that you
+                can search for in the concise or formatted view.  You can search for ...
+                    - a particular step number such as step "2"
+                    - a virtual entity_id such as {colorize('V123-S2', self.colors['entityid'] + ',dim')}
+                        {colorize('(the -S number after the virtual entity ID is the step number that updated it.  Try', 'italics')} 
+                            {colorize('searching for just the V number before the dash to find all steps that include it.)', 'italics')} 
+                    - any other string such as a match_key, principle code, specific name, address, etc
 
-            '''))
+             '''))
 
     # -----------------------------
     def do_how(self,arg):
@@ -3842,15 +3862,14 @@ class G2CmdShell(cmd.Cmd):
             self.help_how()
             return -1 if calledDirect else 0
 
-        arg = arg.lower()
-        how_display_level = 'stats+brief'
-        for level in ['detail', 'full', 'brief', 'stats']:
+        how_display_level = 'overview'
+        for level in ['summary', 'concise', 'formatted', 'verbose']:
             if level in arg:
                 how_display_level = level
-                arg = arg.replace(level,'')
+                arg = arg.replace(level,'').strip()
 
         try: 
-            entityId = int(arg)
+            entity_id = int(arg)
         except:
             print(f'\n invalid syntax: {arg} \n')
             self.help_how()
@@ -3863,10 +3882,10 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_OPTION_INCLUDE_FEATURE_STATS')
         getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS')
         getFlagBits = self.computeApiFlags(getFlagList)
-        apiCall = f'getEntityByEntityIDV2({arg}, {getFlagBits}, response)' 
+        apiCall = f'getEntityByEntityIDV2({entity_id}, {getFlagBits}, response)' 
         try: 
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(arg), getFlagBits, response)
+            retcode = g2Engine.getEntityByEntityIDV2(entity_id, getFlagBits, response)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3918,7 +3937,7 @@ class G2CmdShell(cmd.Cmd):
         howFlagBits = self.computeApiFlags(howFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.howEntityByEntityIDV2(entityId, howFlagBits, response)
+            retcode = g2Engine.howEntityByEntityIDV2(entity_id, howFlagBits, response)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3927,22 +3946,34 @@ class G2CmdShell(cmd.Cmd):
             return -1 if calledDirect else 0
         json_data = json.loads(response)
         if debugOutput:
-            apiCall = f'howEntityByEntityIDV2({entityId}, {howFlagBits}, response)'
+            apiCall = f'howEntityByEntityIDV2({entity_id}, {howFlagBits}, response)'
             showApiDebug('howEntity', apiCall, howFlagList, json_data)
 
-        root_node_id = 'FINAL_STATE'
-        root_node = Node(root_node_id)
-        tree_nodes = {root_node_id: root_node}
+        entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
+        how_header = colorize(f"\nHow report for entity: {entity_id} - {entity_name}\n", self.colors['entityid'])
+        if json_data['HOW_RESULTS']['FINAL_STATE'].get('NEED_REEVALUATION', 0) or \
+           len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']) > 1:
+            how_header += colorize('REEVALUATION NEEDED!', self.colors['bad']) + '\n'
 
-        #--notate steps and create aggregate dictionary
+        #--annotate steps and create aggregate dictionary
+        stat_pack['largest_combine_steps'] = {}
+        stat_pack['lowest_feature_scores'] = {}
+        stat_pack['name_not_scored'] = []
+
         step_count = 0
         aggregate_nodes = {}
         resolution_steps = {}
         for step_data in json_data['HOW_RESULTS']['RESOLUTION_STEPS']:
             step_count += 1
             step_num = step_data['STEP']
+
+            step_data['MATCH_INFO']['WHY_KEY'] = step_data['MATCH_INFO']['MATCH_KEY']
+            step_data['MATCH_INFO']['WHY_ERRULE_CODE'] = step_data['MATCH_INFO']['ERRULE_CODE']
             for virtual_entity_num in ['VIRTUAL_ENTITY_1', 'VIRTUAL_ENTITY_2']:
                 step_data[virtual_entity_num].update(self.get_virtual_entity_data(step_data[virtual_entity_num], features_by_record))
+                features = step_data[virtual_entity_num]['features']
+                why_key, features = self.whyAddMatchInfo(features, step_data['MATCH_INFO'])
+                step_data[virtual_entity_num]['features'] = features
 
             step_data['singleton_nodes'] = []
             step_data['aggregate_nodes'] = []
@@ -3956,6 +3987,12 @@ class G2CmdShell(cmd.Cmd):
                 step_data['step_type'] = 'Create virtual entity'
             elif len(step_data['aggregate_nodes']) == 2:
                 step_data['step_type'] = 'Combine virtual entities'
+                lowest_member_count = step_data['VIRTUAL_ENTITY_1']['member_count'] if step_data['VIRTUAL_ENTITY_1']['member_count'] < step_data['VIRTUAL_ENTITY_2']['member_count'] else step_data['VIRTUAL_ENTITY_2']['member_count']
+                total_member_count = step_data['VIRTUAL_ENTITY_1']['member_count'] + step_data['VIRTUAL_ENTITY_2']['member_count'] 
+                if lowest_member_count not in stat_pack['largest_combine_steps']:
+                    stat_pack['largest_combine_steps'][lowest_member_count] = [[step_num, total_member_count]]
+                else:
+                      stat_pack['largest_combine_steps'][lowest_member_count].append([step_num, total_member_count])
             else:
                 step_data['step_type'] = 'Add record to virtual entity'
 
@@ -3964,13 +4001,55 @@ class G2CmdShell(cmd.Cmd):
             else:
                 stat_pack['steps'][step_data['step_type']] += 1
 
+            step_data['MATCH_INFO']['matchKey'] = step_data['MATCH_INFO']['MATCH_KEY']
+            step_data['MATCH_INFO']['ruleCode'] = self.getRuleDesc(step_data['MATCH_INFO']['ERRULE_CODE'])
+            formatted_match_key, formatted_errule_code = formatMatchData(step_data['MATCH_INFO'], self.colors).split('\n ')
+            step_data['MATCH_INFO']['formatted_match_key'] = formatted_match_key
+            step_data['MATCH_INFO']['formatted_errule_code'] = formatted_errule_code
+            if formatted_errule_code not in stat_pack['rules']:
+                stat_pack['rules'][formatted_errule_code] = {}
+                stat_pack['rule_counter'][formatted_errule_code] = 1
+            else:
+                stat_pack['rule_counter'][formatted_errule_code] += 1
+            if formatted_match_key not in stat_pack['rules'][formatted_errule_code]:
+                stat_pack['rules'][formatted_errule_code][formatted_match_key] = 1
+            else: 
+                stat_pack['rules'][formatted_errule_code][formatted_match_key] += 1
+
+            #--format the features and find the lowest scoring
+            for lib_feat_id in step_data['VIRTUAL_ENTITY_2']['features']:
+                feature_data = step_data['VIRTUAL_ENTITY_2']['features'][lib_feat_id]
+                feature_data = self.whyFormatFeature(feature_data, step_data['MATCH_INFO'])
+                step_data['VIRTUAL_ENTITY_2']['features'][lib_feat_id] = feature_data
+
+            name_was_scored = False
+            for lib_feat_id in step_data['VIRTUAL_ENTITY_1']['features']:
+                feature_data = step_data['VIRTUAL_ENTITY_1']['features'][lib_feat_id]
+                feature_data = self.whyFormatFeature(feature_data, step_data['MATCH_INFO'])
+                step_data['VIRTUAL_ENTITY_1']['features'][lib_feat_id] = feature_data
+
+                ftype_id = feature_data['ftypeId']
+                ftype_code = feature_data['ftypeCode']
+                if feature_data.get('wasScored', 'No') == 'Yes' and ftype_code in step_data['MATCH_INFO']['MATCH_KEY']:
+                    match_score = feature_data['matchScore']
+                    if ftype_id not in stat_pack['lowest_feature_scores']:
+                        stat_pack['lowest_feature_scores'][ftype_id] = {}
+                    if match_score not in stat_pack['lowest_feature_scores'][ftype_id]:
+                        stat_pack['lowest_feature_scores'][ftype_id][match_score] = [step_num]
+                    else:
+                        stat_pack['lowest_feature_scores'][ftype_id][match_score].append(step_num)
+                    if ftype_code == 'NAME':
+                        name_was_scored = True
+            if not name_was_scored:
+                stat_pack['name_not_scored'].append(step_num)
+
             resolution_steps[step_num] = step_data
             new_virtual_id = step_data.get('RESULT_VIRTUAL_ENTITY_ID', None)
             if new_virtual_id:
-                if new_virtual_id in aggregate_nodes:
-                    print(json.dumps(step_data, indent=4))
-                    print(f'\nunexpected: multiple steps for {new_virtual_id} {step_num} and ' + aggregate_nodes[new_virtual_id]['final_step'])
-                    input('wait')
+                #if new_virtual_id in aggregate_nodes:
+                    #print(json.dumps(step_data, indent=4))
+                    #print(f'\nunexpected: multiple steps for {new_virtual_id} {step_num} and ' + aggregate_nodes[new_virtual_id]['final_step'])
+                    #input('wait')
                 aggregate_nodes[new_virtual_id] = {'final_step': step_num, 'all_steps': []}
 
         #--start from the end and combine the prior steps that just add another singleton 
@@ -4003,237 +4082,68 @@ class G2CmdShell(cmd.Cmd):
                             current_aggregate_list.append(aggregate_node_id)
                             render_node_list.append({'node_id': aggregate_node_id, 'parent_node': current_node_id})
 
-        #--start rendering nodes
-        root_node = Node('root')
-        node_dict = {'root': root_node}
-        for render_node_data in render_node_list:
+        #--create overview tree
+        summary_node = Node('summary')
+        summary_node.node_desc = colorize('SUMMARY', 'bold')
 
-            this_node_id = render_node_data['node_id']
-            this_node = Node(this_node_id)
-            node_dict[this_node_id] = this_node
-            node_dict[render_node_data['parent_node']].add_child(this_node)
-
-            colored_node_id = colorize(this_node_id, self.colors['entityid'])
-            if render_node_data['parent_node'] == 'root':
-                num_final_nodes = len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES'])
-                this_node_index = 0
-                for final_state_data in json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']:
-                    this_node_index += 1
-                    if final_state_data['VIRTUAL_ENTITY_ID'] == this_node_id:
-                        break
-                if num_final_nodes == 1:
-                    this_node.node_desc = colorize(f"{colored_node_id}: final entity", 'dim')
-                else:
-                    this_node.node_desc = colorize(f"{colored_node_id}: final entity {this_node_index} of {num_final_nodes}", 'dim')
-            else:
-                this_node.node_desc = colorize(f"{colored_node_id}: interim entity", 'dim')
-
-            #--go through all the steps that built this node
-            for step_num in sorted(aggregate_nodes[this_node_id]['all_steps'], reverse=True):
-                step_data = resolution_steps[step_num]
-
-                step_node = Node(step_num)
-                step_node.node_desc = 'Step ' + str(step_num) + ': ' + step_data['step_type']
-                this_node.add_child(step_node)
-
-                #--always ensure lone singleton is on the left
-                if step_data['VIRTUAL_ENTITY_1']['node_type'] != 'singleton' and step_data['VIRTUAL_ENTITY_2']['node_type'] == 'singleton':
-                    left_virtual_entity = 'VIRTUAL_ENTITY_2'
-                    right_virtual_entity = 'VIRTUAL_ENTITY_1'
-                else:
-                    left_virtual_entity = 'VIRTUAL_ENTITY_1'
-                    right_virtual_entity = 'VIRTUAL_ENTITY_2'
-
-                left_features = step_data[left_virtual_entity]['features']
-                right_features = step_data[right_virtual_entity]['features']
-
-                step_data['MATCH_INFO']['WHY_KEY'] = step_data['MATCH_INFO']['MATCH_KEY']
-                step_data['MATCH_INFO']['WHY_ERRULE_CODE'] = step_data['MATCH_INFO']['ERRULE_CODE']
-                why_key1, left_features = self.whyAddMatchInfo(left_features, step_data['MATCH_INFO'])
-                why_key2, right_features = self.whyAddMatchInfo(right_features, step_data['MATCH_INFO'])
-                step_data['MATCH_INFO']['matchKey'] = step_data['MATCH_INFO']['MATCH_KEY']
-                step_data['MATCH_INFO']['ruleCode'] = self.getRuleDesc(step_data['MATCH_INFO']['ERRULE_CODE'])
-                formatted_match_key, formatted_errule_code = formatMatchData(step_data['MATCH_INFO'], self.colors).split('\n ')
-                step_node.node_desc += f" on {formatted_match_key} {formatted_errule_code}"
-
-                if formatted_errule_code not in stat_pack['rules']:
-                    stat_pack['rules'][formatted_errule_code] = {}
-                    stat_pack['rule_counter'][formatted_errule_code] = 1
-                else:
-                    stat_pack['rule_counter'][formatted_errule_code] += 1
-                if formatted_match_key not in stat_pack['rules'][formatted_errule_code]:
-                    stat_pack['rules'][formatted_errule_code][formatted_match_key] = 1
-                else: 
-                    stat_pack['rules'][formatted_errule_code][formatted_match_key] += 1
-
-                #--find the best matching record for each side
-                #-- to make selection of best matching feature less arbitrary
-                left_matching_record_list = {}
-                right_matching_record_list = {}
-                for lib_feat_id in left_features:
-                    if left_features[lib_feat_id].get('wasScored', 'No') == 'Yes':
-                        for record_key in left_features[lib_feat_id]['record_list']:
-                            if record_key not in left_matching_record_list:
-                                left_matching_record_list[record_key] = []
-                            left_matching_record_list[record_key].append(lib_feat_id)
-
-                        matched_feat_id = left_features[lib_feat_id]['matchedFeatId']
-                        for record_key in right_features[matched_feat_id]['record_list']:
-                            if record_key not in right_matching_record_list:
-                                right_matching_record_list[record_key] = []
-                            right_matching_record_list[record_key].append(matched_feat_id)
-                best_left_record_key = sorted(sorted([{'key': i, 'len': len(left_matching_record_list[i])} for i in left_matching_record_list], key=lambda k: k['key']), key=lambda k: k['len'], reverse=True)[0]['key']
-                best_right_record_key = sorted(sorted([{'key': i, 'len': len(right_matching_record_list[i])} for i in right_matching_record_list], key=lambda k: k['key']), key=lambda k: k['len'], reverse=True)[0]['key']
-
-                #--gather the features to display by type for each side
-                features_by_type = {}
-                for side_data in [['left', left_features, right_features, best_left_record_key, best_right_record_key], 
-                                  ['right', right_features, left_features, best_right_record_key, best_left_record_key]]:
-                    side = side_data[0]
-                    features1 = side_data[1]
-                    features2 = side_data[2]
-                    best_record_key1 = side_data[3]
-                    best_record_key2 = side_data[4]
-
-                    for lib_feat_id in features1:
-                        feature_data = features1[lib_feat_id]
-
-                        ftype_id = feature_data['ftypeId']
-                        if ftype_id not in features_by_type:
-                            features_by_type[ftype_id] = {'left': [], 'right': []}
-
-                        #--get the best record keys for each side
-                        matched_feat_id = feature_data.get('matchedFeatId')
-                        if matched_feat_id:
-                            if best_record_key1 in features1[lib_feat_id]['record_list']:
-                                feature_data['record_key1'] = best_record_key1
-                            else: 
-                                feature_data['record_key1'] = features1[lib_feat_id]['record_list'][0]
-                            if best_record_key2 in features2[matched_feat_id]['record_list']:
-                                feature_data['record_key2'] = best_record_key2
-                            else: 
-                                feature_data['record_key2'] = features2[matched_feat_id]['record_list'][0]
-
-                        #--skip unmatched if not showing full detail
-                        elif how_display_level != 'full':
-                            continue
-
-                        feature_data = self.whyFormatFeature(feature_data, step_data['MATCH_INFO'])
-                        features_by_type[ftype_id][side].append(feature_data)
-
-                colored_virtual_id1 = colorize(step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
-                colored_virtual_id2 = colorize(step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
-
-                if 'brief' in how_display_level:
-                    step_node.node_text = f"{colored_virtual_id1} {step_data[left_virtual_entity]['colored_desc']} {step_data[left_virtual_entity]['entity_name']}"
-                    if not step_data['step_type'].startswith('Add'):
-                        step_node.node_text += f"\n{colored_virtual_id2} {step_data[right_virtual_entity]['colored_desc']} {step_data[right_virtual_entity]['entity_name']}"
-                    for ftypeId in sorted(features_by_type.keys(), key=lambda k: self.featureSequence[k]):
-                        for featureData in sorted(sorted(features_by_type[ftypeId]['left'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
-                            coloredFtypeCode = colorize(featureData['ftypeCode'], self.colors['rowtitle'])
-                            coloredRecordKey1 = colorize(': '.join(featureData['record_key1'].split(self.dsrc_record_sep)), self.colors['datasource'])
-                            coloredRecordKey2 = colorize(': '.join(featureData['record_key2'].split(self.dsrc_record_sep)), self.colors['datasource'])
-                            coloredMatchScore = colorize(f"({featureData['matchScoreDisplay']})", featureData['featColor'])
-                            score_node = Node(featureData['ftypeCode'])
-                            score_node.node_desc = f"{coloredFtypeCode}: {coloredRecordKey1} - {featureData['featDesc']} | {coloredRecordKey2} - {featureData['matchedFeatDesc']} {coloredMatchScore}"
-                            step_node.add_child(score_node)
-                    score_node.node_text = ' '
-                else:
-                    row_title = colorize('VIRTUAL_ID', 'dim')
-                    tblTitle = None
-                    tblColumns = []
-                    tblColumns.append({'name': row_title, 'width': 20, 'align': 'left'})
-                    tblColumns.append({'name': colored_virtual_id1, 'width': 75, 'align': 'left'})
-                    tblColumns.append({'name': colorize('scores', 'dim'), 'width': 10, 'align': 'center'})
-                    tblColumns.append({'name': colored_virtual_id2, 'width': 75, 'align': 'left'})
-                    tblRows = []
-
-                    row_title = colorize('DATA_SOURCES', self.colors['rowtitle'])
-                    tblRow = [row_title]
-                    for virtual_entity_data in [[left_virtual_entity, best_left_record_key], 
-                                                [right_virtual_entity, best_right_record_key]]:
-                        virtual_entity = virtual_entity_data[0]
-                        best_record_key = virtual_entity_data[1]
-                        if step_data[virtual_entity]['node_type'] == 'singleton':
-                            dsrc_display = step_data[virtual_entity]['colored_desc']
-                        else:
-                            dsrc_display = step_data[virtual_entity]['node_desc'] + '\n best: ' + colorize(': '.join(best_record_key.split(self.dsrc_record_sep)), self.colors['datasource'])
-                        tblRow.append(dsrc_display)
-                    tblRow.insert(2, '') #--for score column
-                    tblRows.append(tblRow)
-
-                    for ftypeId in sorted(features_by_type.keys(), key=lambda k: self.featureSequence[k]):
-                        if not features_by_type[ftypeId]['left'] and not features_by_type[ftypeId]['right']:
-                            continue #-- removes unscored if not full
-                        ftype_code = self.ftypeLookup[ftypeId]['FTYPE_CODE']
-                        colored_ftype_code = colorize(ftype_code, self.colors['rowtitle'])
-
-                        #--get the right side values
-                        scored_right = {}
-                        unscored_right = []
-                        for feature_data in sorted(sorted(features_by_type[ftypeId]['right'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
-                            if feature_data.get('wasScored'):
-                                scored_right[feature_data['libFeatId']] = feature_data
-                            else:
-                                unscored_right.append(feature_data['formattedFeatDesc1'])
-
-                        #--add all the scored ones from the lefts point of view
-                        unscored_left = []
-                        for feature_data in sorted(sorted(features_by_type[ftypeId]['left'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
-                            if feature_data.get('wasScored'):
-                                feature_score = '\n'.join(colorize(item, feature_data['featColor']) for item in feature_data['matchScoreDisplay'].split('|'))
-
-                                feature_desc1 = feature_data['formattedFeatDesc1'] 
-                                if step_data[left_virtual_entity]['node_type'] != 'singleton':
-                                    from_desc = 'from: ' + colorize(': '.join(feature_data['record_key1'].split(self.dsrc_record_sep)), self.colors['datasource'])
-                                    if feature_data['record_key1'] == best_left_record_key:
-                                        from_desc = colorize(from_desc, 'dim')
-                                    feature_desc1 += '\n ' + from_desc
-
-                                feature_desc2 = scored_right[feature_data['matchedFeatId']]['formattedFeatDesc1'] 
-                                if step_data[right_virtual_entity]['node_type'] != 'singleton':
-                                    from_desc = 'from: ' + colorize(': '.join(feature_data['record_key2'].split(self.dsrc_record_sep)), self.colors['datasource'])
-                                    if feature_data['record_key2'] == best_right_record_key:
-                                        from_desc = colorize(from_desc, 'dim')
-                                    feature_desc2 += '\n ' + from_desc
-                 
-                                tblRows.append([colored_ftype_code, feature_desc1, feature_score, feature_desc2])
-                            else:
-                                unscored_left.append(feature_data['formattedFeatDesc1'])
-
-                        if unscored_right or unscored_left:
-                            tblRows.append([colored_ftype_code, '\n'.join(unscored_left), '', '\n'.join(unscored_right)])
-
-                    self.renderTable(tblTitle, tblColumns, tblRows, displayFlag = 'No')
-                    step_node.node_text = self.currentRenderString
-
-        #--render stats
-        statistics_node = Node('statistics')
-        statistics_node.node_desc = colorize('STATISTICS', 'bold')
-
-        summary_node = Node('SUMMARY')
-        summary_node.node_desc = self.how_format_statistic_header('SUMMARY')
-        statistics_node.add_child(summary_node)
-
-        for stat_data in [['Total record count', total_record_count], 
-                          ['Total feature count', total_feature_count], 
-                          ['Final entity count', len(root_node.children)]]:
-            item_node = Node(stat_data[0])
-            item_node.node_desc= self.how_format_statistic(stat_data[0], stat_data[1])
-            summary_node.add_child(item_node)
+        resolution_node = Node('resolution')
+        resolution_node.node_desc = self.how_format_statistic_header('RESOLUTION SUMMARY')
+        summary_node.add_child(resolution_node)
 
         category_node = Node('steps')
         category_node.node_desc = self.how_format_statistic('Resolution steps', step_count)
-        summary_node.add_child(category_node)
         for item in stat_pack['steps']:
             item_node = Node(item)
             item_node.node_desc = colorize(self.how_format_statistic(item, stat_pack['steps'][item]), 'italics')
             category_node.add_child(item_node)
+        resolution_node.add_child(category_node)
+
+        interesting_step_list = []
+        for step_num in stat_pack['name_not_scored']:
+            interesting_step_list.append([step_num, 'name not scored'])
+        for ftype_id in sorted(stat_pack['lowest_feature_scores']):
+            ftype_code = self.ftypeLookup[ftype_id]['FTYPE_CODE']
+            cntr = 0
+            for lowest_score in sorted(stat_pack['lowest_feature_scores'][ftype_id]):
+                if lowest_score < 90:
+                    for step_num in stat_pack['lowest_feature_scores'][ftype_id][lowest_score]:
+                        interesting_step_list.append([step_num, f"{ftype_code} scored {lowest_score}"])
+                    cntr += 1
+                if cntr == 2:
+                    break
+        cntr = 0
+        for lowest_member_count in sorted(stat_pack['largest_combine_steps'], reverse=True):
+            for large_step_info in sorted(stat_pack['largest_combine_steps'][lowest_member_count], key=lambda k: k[1], reverse=True):
+                step_num = large_step_info[0]
+                highest_member_count = large_step_info[1] - lowest_member_count
+                interesting_step_list.append([step_num, f"Combines a group of {lowest_member_count} with a group of {highest_member_count}"])
+            cntr += 1
+            if cntr == 2:
+                break
+        if interesting_step_list:
+            interesting_step_data = {}
+            for step_num, reason in interesting_step_list:
+                if step_num not in interesting_step_data:
+                    interesting_step_data[step_num] = [reason]
+                else:
+                    interesting_step_data[step_num].append(reason)
+
+            category_node = Node('interesting steps')
+            category_node.node_desc = self.how_format_statistic('Steps of interest', len(interesting_step_data))
+            for step_num in sorted(interesting_step_data.keys()):
+                step_prefix = f"Step {step_num} - "
+                interesting_step_node = Node(step_num)
+                interesting_step_node.node_desc = ''
+                for reason in interesting_step_data[step_num]:
+                    interesting_step_node.node_desc += step_prefix + reason
+                    step_prefix = ' ' * len(step_prefix)
+                category_node.add_child(interesting_step_node)
+            resolution_node.add_child(category_node)
 
         category_node = Node('rules')
-        category_node.node_desc = colorize('PRINCIPLES', self.colors['highlight1'])
-        statistics_node.add_child(category_node)
-        for rule_info in sorted(stat_pack['rule_counter'].items() , key=lambda item: item[1],reverse=True):
+        category_node.node_desc = 'Principles used'
+        resolution_node.add_child(category_node)
+        for rule_info in sorted(stat_pack['rule_counter'].items(), key=lambda item: item[1], reverse=True):
             rule = rule_info[0]
             rule_node = Node(rule)
             rule_cnt = colorize(f"({rule_info[1]})", self.colors['highlight2'])
@@ -4246,9 +4156,16 @@ class G2CmdShell(cmd.Cmd):
                 match_key_node.node_desc = f"{match_key} {match_key_cnt}"
                 rule_node.add_child(match_key_node)
 
-        category_node = Node('features')
-        category_node.node_desc = colorize('FEATURES', self.colors['highlight1'])
-        statistics_node.add_child(category_node)
+        category_node = Node('entity')
+        category_node.node_desc = colorize('ENTITY SUMMARY', self.colors['highlight1'])
+        summary_node.add_child(category_node)
+
+        for stat_data in [['Total record count', total_record_count], 
+                          ['Total feature count', total_feature_count]]:
+            item_node = Node(stat_data[0])
+            item_node.node_desc= self.how_format_statistic(stat_data[0], stat_data[1])
+            category_node.add_child(item_node)
+
         for ftype_id in sorted(stat_pack['features'], key=lambda k: self.featureSequence[k]):
             ftype_node = Node(ftype_id)
             ftype_cnt = colorize(f"({stat_pack['ftype_counter'][ftype_id]['featureCount']})", self.colors['highlight2'])
@@ -4269,26 +4186,287 @@ class G2CmdShell(cmd.Cmd):
                 elif cnt == 3 and len(feat_desc_info_list) > 4:
                     ftype_node.add_child(Node('~~~'))
 
-        #--assemble report
-        entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
-        how_report = colorize(f"\nHow report for entity: {entityId} - {entity_name}\n", self.colors['entityid'])
+        #--start rendering nodes based on requested view and filter
+        tree_nodes = {}
+        filter_str = None
+        while True:
+            tree_nodes['root'] = Node('root')
+            tree_nodes['root'].node_desc = colorize('RESOLUTION STEPS', 'bold')
+            for render_node_data in render_node_list:
+                render_node_id = render_node_data['node_id']
+                parent_node_id = render_node_data['parent_node']
 
-        if json_data['HOW_RESULTS']['FINAL_STATE'].get('NEED_REEVALUATION', 0) or \
-           len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']) > 1:
-            how_report += colorize('REEVALUATION NEEDED!', self.colors['bad']) + '\n'
+                #--describe the node 
+                colored_node_id = colorize(render_node_id, self.colors['entityid'])
+                if parent_node_id == 'root':
+                    num_final_nodes = len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES'])
+                    final_node_index = 0
+                    for final_state_data in json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']:
+                        final_node_index += 1
+                        if final_state_data['VIRTUAL_ENTITY_ID'] == render_node_id:
+                            break
+                    if num_final_nodes == 1:
+                        render_node_desc = colorize(f"{colored_node_id}: final entity", 'dim')
+                    else:
+                        render_node_desc = colorize(f"{colored_node_id}: final entity {render_node_index} of {num_final_nodes}", 'dim')
+                else:
+                    render_node_desc = colorize(f"{colored_node_id}: interim entity", 'dim')
 
-        if how_display_level != 'brief':
-            how_report += '\n' + statistics_node.render_tree() 
- 
-        if how_display_level != 'stats' and root_node.children:  #--will be no children if singleton
-            root_node.node_desc = 'RESOLUTION STEPS'
-            how_report += '\n' + root_node.render_tree()
-            #how_report += '\n' + colorize('RESOLUTION STEPS', 'bold')
-            #for final_node in root_node.children:
-            #    how_report += '\n' + final_node.render_tree()
+                tree_nodes[render_node_id] = Node(render_node_id)
+                tree_nodes[render_node_id].node_desc = render_node_desc
+                tree_nodes[parent_node_id].add_child(tree_nodes[render_node_id])
+                tree_nodes[render_node_id].add_parent(tree_nodes[parent_node_id])
 
-        self.currentRenderString = how_report
-        self.do_scroll('auto')
+                #--go through all the steps that built this node
+                for step_num in sorted(aggregate_nodes[render_node_id]['all_steps'], reverse=True):
+                    step_data = resolution_steps[step_num]
+                    step_node_id = f"Step {step_num}"
+                    step_node_desc = step_node_id + ': ' + step_data['step_type']
+                    step_node_desc += f" on {step_data['MATCH_INFO']['formatted_match_key']} {step_data['MATCH_INFO']['formatted_errule_code']}"
+
+                    #--always ensure lone singleton is on the left
+                    if step_data['VIRTUAL_ENTITY_1']['node_type'] != 'singleton' and step_data['VIRTUAL_ENTITY_2']['node_type'] == 'singleton':
+                        left_virtual_entity = 'VIRTUAL_ENTITY_2'
+                        right_virtual_entity = 'VIRTUAL_ENTITY_1'
+                    else:
+                        left_virtual_entity = 'VIRTUAL_ENTITY_1'
+                        right_virtual_entity = 'VIRTUAL_ENTITY_2'
+
+                    left_features = step_data[left_virtual_entity]['features']
+                    right_features = step_data[right_virtual_entity]['features']
+
+                    #--find the best matching record for each side
+                    #-- to make selection of best matching feature less arbitrary
+                    left_matching_record_list = {}
+                    right_matching_record_list = {}
+                    for lib_feat_id in left_features:
+                        if left_features[lib_feat_id].get('wasScored', 'No') == 'Yes':
+                            for record_key in left_features[lib_feat_id]['record_list']:
+                                if record_key not in left_matching_record_list:
+                                    left_matching_record_list[record_key] = []
+                                left_matching_record_list[record_key].append(lib_feat_id)
+
+                            matched_feat_id = left_features[lib_feat_id]['matchedFeatId']
+                            for record_key in right_features[matched_feat_id]['record_list']:
+                                if record_key not in right_matching_record_list:
+                                    right_matching_record_list[record_key] = []
+                                right_matching_record_list[record_key].append(matched_feat_id)
+                    best_left_record_key = sorted(sorted([{'key': i, 'len': len(left_matching_record_list[i])} for i in left_matching_record_list], key=lambda k: k['key']), key=lambda k: k['len'], reverse=True)[0]['key']
+                    best_right_record_key = sorted(sorted([{'key': i, 'len': len(right_matching_record_list[i])} for i in right_matching_record_list], key=lambda k: k['key']), key=lambda k: k['len'], reverse=True)[0]['key']
+
+                    #--gather the features to display by type for each side
+                    features_by_type = {}
+                    for side_data in [['left', left_features, right_features, best_left_record_key, best_right_record_key], 
+                                      ['right', right_features, left_features, best_right_record_key, best_left_record_key]]:
+                        side = side_data[0]
+                        features1 = side_data[1]
+                        features2 = side_data[2]
+                        best_record_key1 = side_data[3]
+                        best_record_key2 = side_data[4]
+
+                        for lib_feat_id in features1:
+                            feature_data = features1[lib_feat_id]
+
+                            ftype_id = feature_data['ftypeId']
+                            if ftype_id not in features_by_type:
+                                features_by_type[ftype_id] = {'left': [], 'right': []}
+
+                            #--get the best record keys for each side
+                            matched_feat_id = feature_data.get('matchedFeatId')
+                            if matched_feat_id:
+                                if best_record_key1 in features1[lib_feat_id]['record_list']:
+                                    feature_data['record_key1'] = best_record_key1
+                                else: 
+                                    feature_data['record_key1'] = features1[lib_feat_id]['record_list'][0]
+
+                                if matched_feat_id not in features2:
+                                    feature_data['record_key2'] = 'ERROR' + self.dsrc_record_sep + 'MISSING'
+                                else:
+                                    if best_record_key2 in features2[matched_feat_id]['record_list']:
+                                        feature_data['record_key2'] = best_record_key2
+                                    else: 
+                                        feature_data['record_key2'] = features2[matched_feat_id]['record_list'][0]
+
+                            #--skip unmatched if not showing full detail
+                            elif how_display_level != 'verbose':
+                                continue
+
+                            features_by_type[ftype_id][side].append(feature_data)
+
+                    colored_virtual_id1 = colorize(step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
+                    colored_virtual_id2 = colorize(step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
+                    #vid1_parts = step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'].split('-')
+                    #vid2_parts = step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'].split('-')
+                    #colored_virtual_id1 = colorize(vid1_parts[0], self.colors['entityid'] + ',dim') + (colorize('-' + vid1_parts[1],'dim') if len(vid1_parts) > 1 else '')
+                    #colored_virtual_id2 = colorize(vid2_parts[0], self.colors['entityid'] + ',dim') + (colorize('-' + vid2_parts[1],'dim') if len(vid2_parts) > 1 else '')
+
+                    if how_display_level == 'concise':
+                        step_node_desc += f"\n{colored_virtual_id1} {step_data[left_virtual_entity]['colored_desc']} {step_data[left_virtual_entity]['entity_name']}"
+                        if not step_data['step_type'].startswith('Add'):
+                            step_node_desc += f"\n{colored_virtual_id2} {step_data[right_virtual_entity]['colored_desc']} {step_data[right_virtual_entity]['entity_name']}"
+
+                        step_node_text = ''
+                        for ftypeId in sorted(features_by_type.keys(), key=lambda k: self.featureSequence[k]):
+                            for featureData in sorted(sorted(features_by_type[ftypeId]['left'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
+                                coloredFtypeCode = colorize(featureData['ftypeCode'], self.colors['rowtitle'])
+                                coloredRecordKey1 = colorize(': '.join(featureData['record_key1'].split(self.dsrc_record_sep)), self.colors['datasource'])
+                                coloredRecordKey2 = colorize(': '.join(featureData['record_key2'].split(self.dsrc_record_sep)), self.colors['datasource'])
+                                coloredMatchScore = colorize(f"({featureData['matchScoreDisplay']})", featureData['featColor'])
+                                step_node_text += f"{coloredFtypeCode}: {coloredRecordKey1} - {featureData['featDesc']} | {coloredRecordKey2} - {featureData['matchedFeatDesc']} {coloredMatchScore}\n"
+                    elif how_display_level != 'summary':
+                        row_title = colorize('VIRTUAL_ID', 'dim')
+                        tblTitle = None
+                        tblColumns = []
+                        tblColumns.append({'name': row_title, 'width': 20, 'align': 'left'})
+                        tblColumns.append({'name': colored_virtual_id1, 'width': 75, 'align': 'left'})
+                        tblColumns.append({'name': colorize('scores', 'dim'), 'width': 10, 'align': 'center'})
+                        tblColumns.append({'name': colored_virtual_id2, 'width': 75, 'align': 'left'})
+                        tblRows = []
+
+                        row_title = colorize('DATA_SOURCES', self.colors['rowtitle'])
+                        tblRow = [row_title]
+                        for virtual_entity_data in [[left_virtual_entity, best_left_record_key], 
+                                                    [right_virtual_entity, best_right_record_key]]:
+                            virtual_entity = virtual_entity_data[0]
+                            best_record_key = virtual_entity_data[1]
+                            if step_data[virtual_entity]['node_type'] == 'singleton':
+                                dsrc_display = step_data[virtual_entity]['colored_desc']
+                            else:
+                                dsrc_display = step_data[virtual_entity]['node_desc'] + '\n best: ' + colorize(': '.join(best_record_key.split(self.dsrc_record_sep)), self.colors['datasource'])
+                            tblRow.append(dsrc_display)
+                        tblRow.insert(2, '') #--for score column
+                        tblRows.append(tblRow)
+
+                        for ftypeId in sorted(features_by_type.keys(), key=lambda k: self.featureSequence[k]):
+                            if not features_by_type[ftypeId]['left'] and not features_by_type[ftypeId]['right']:
+                                continue #-- removes unscored if not full
+                            ftype_code = self.ftypeLookup[ftypeId]['FTYPE_CODE']
+                            colored_ftype_code = colorize(ftype_code, self.colors['rowtitle'])
+
+                            #--get the right side values
+                            scored_right = {}
+                            unscored_right = []
+                            for feature_data in sorted(sorted(features_by_type[ftypeId]['right'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
+                                if feature_data.get('wasScored'):
+                                    scored_right[feature_data['libFeatId']] = feature_data
+                                else:
+                                    unscored_right.append(feature_data['formattedFeatDesc1'])
+
+                            #--add all the scored ones from the lefts point of view
+                            unscored_left = []
+                            for feature_data in sorted(sorted(features_by_type[ftypeId]['left'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
+                                if feature_data.get('wasScored'):
+                                    feature_score = '\n'.join(colorize(item, feature_data['featColor']) for item in feature_data['matchScoreDisplay'].split('|'))
+
+                                    feature_desc1 = feature_data['formattedFeatDesc1'] 
+                                    if step_data[left_virtual_entity]['node_type'] != 'singleton':
+                                        from_desc = 'from: ' + colorize(': '.join(feature_data['record_key1'].split(self.dsrc_record_sep)), self.colors['datasource'])
+                                        if feature_data['record_key1'] == best_left_record_key:
+                                            from_desc = colorize(from_desc, 'dim')
+                                        feature_desc1 += '\n ' + from_desc
+
+                                    if feature_data['matchedFeatId'] not in scored_right:
+                                        feature_desc2 = colorize(f"Internal error: {feature_data['matchedFeatId']} missing from {colored_virtual_id2}", self.colors['bad'])
+                                        #input(feature_desc2 + ', press any key')
+                                    else:
+                                        feature_desc2 = scored_right[feature_data['matchedFeatId']]['formattedFeatDesc1'] 
+                                    if step_data[right_virtual_entity]['node_type'] != 'singleton':
+                                        from_desc = 'from: ' + colorize(': '.join(feature_data['record_key2'].split(self.dsrc_record_sep)), self.colors['datasource'])
+                                        if feature_data['record_key2'] == best_right_record_key:
+                                            from_desc = colorize(from_desc, 'dim')
+                                        feature_desc2 += '\n ' + from_desc
+                     
+                                    tblRows.append([colored_ftype_code, feature_desc1, feature_score, feature_desc2])
+                                else:
+                                    unscored_left.append(feature_data['formattedFeatDesc1'])
+
+                            if unscored_right or unscored_left:
+                                tblRows.append([colored_ftype_code, '\n'.join(unscored_left), '', '\n'.join(unscored_right)])
+
+                        self.renderTable(tblTitle, tblColumns, tblRows, displayFlag = 'No')
+                        step_node_text = self.currentRenderString
+
+                    tree_nodes[step_node_id] = Node(step_node_id)
+                    tree_nodes[step_node_id].node_desc = step_node_desc
+                    tree_nodes[step_node_id].node_text = step_node_text
+                    tree_nodes[render_node_id].add_child(tree_nodes[step_node_id])
+                    tree_nodes[step_node_id].add_parent(tree_nodes[render_node_id])
+
+            if how_display_level == 'overview':
+                how_report = summary_node.render_tree(filter_str)
+            elif tree_nodes['root'].children:  #--will be no children if singleton
+                if filter_str and filter_str.startswith('~node~'):
+                    filter_str = filter_str[6:]
+                    #--steps don't actually have children, must go to the parent entity and show tree from there
+                    if tree_nodes[filter_str].children:
+                        parent_node = tree_nodes[filter_str]
+                    else:
+                        parent_node = tree_nodes[filter_str].parents[0]
+                    if parent_node.parents:
+                        parent_node = parent_node.parents[0]
+                    if parent_node.node_id != 'root':
+                        temp_node = Node('~~~')
+                    else:
+                        temp_node = parent_node
+                    temp_node.add_child(parent_node)
+                    how_report = temp_node.render_tree(filter_str)
+                elif len(tree_nodes['root'].children) > 1:
+                    tree_nodes['root'].node_desc = colorize('Multiple final entities!', self.colors['bad'])
+                    how_report = tree_nodes['root'].render_tree(filter_str)
+                else:
+                    how_report = tree_nodes['root'].children[0].render_tree(filter_str)
+
+            if filter_str and filter_str not in how_report:
+                input(f"\n{filter_str} was not found, press any key")
+                filter_str = None
+            else:
+                self.currentRenderString = how_header + ('\nFiltered for ' + colorize(filter_str, 'fg.white,bg.red') + '\n' if filter_str else '') + '\n' + how_report
+
+            if filter_str:
+                self.do_scroll(search=filter_str)
+            else:
+                self.do_scroll('auto')
+
+            reply = input('\nSelect (O)verview, (C)oncise view, (F)ormatted view, (S)earch or (Q)uit ... ')
+            if reply:
+                removeFromHistory()
+            else:
+                continue
+
+            if reply.upper() in ('Q', 'QUIT'): 
+                break
+            elif reply.upper() == ('O'): 
+                how_display_level = 'overview'
+            elif reply.upper() == ('C'):
+                how_display_level = 'concise'
+            elif reply.upper() == ('F'):
+                how_display_level = 'formatted'
+            elif reply.upper() == ('S'):
+                if len(reply) > 1:
+                    filter_str = reply[1:].strip()
+                else:
+                    filter_str = input('\nEnter a step number, a virtual entity ID, any other string or leave blank to clear filter ... ')
+                    removeFromHistory()
+            elif reply.isnumeric():
+                filter_str = reply
+
+            elif len(reply) > 1:
+                filter_str = reply
+
+            #--check if they entered a valid step number 
+            if filter_str and filter_str.isnumeric():
+                filter_str = f"Step {filter_str}"
+                if filter_str not in tree_nodes:
+                    input(f"\nStep {filter_str} not found, press any key")
+                    filter_str = None  
+
+            #--check if they entered a node_id
+            if filter_str and filter_str in tree_nodes:
+                filter_str = f"~node~{filter_str}"
+
+            if filter_str:
+                how_display_level = 'concise' if how_display_level == 'overview' else how_display_level
+        print()
 
         return
 
@@ -4296,10 +4474,12 @@ class G2CmdShell(cmd.Cmd):
     def get_virtual_entity_data(self, raw_virtual_entity_data, features_by_record):
         virtual_entity_data = {'id': raw_virtual_entity_data['VIRTUAL_ENTITY_ID']}
         virtual_entity_data['record_count'] = 0
+        virtual_entity_data['member_count'] = 0
         virtual_entity_data['records'] = {}
         virtual_entity_data['features'] = {}
         bestNameCandidates = {'PRIMARY': '', 'OTHER': ''}
         for member_data in raw_virtual_entity_data['MEMBER_RECORDS']:
+            virtual_entity_data['member_count'] += 1
             for record in sorted(member_data['RECORDS'], key = lambda k: k['DATA_SOURCE'] + k['RECORD_ID']):
                 virtual_entity_data['record_count'] += 1
                 if record['DATA_SOURCE'] not in virtual_entity_data['records']:
@@ -4349,7 +4529,6 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def how_format_statistic(self, stat, cnt):
         return stat + ' ' + colorize('(' + str(cnt) + ')', self.colors['highlight2'])
-
 
     # -----------------------------
     def do_score(self, arg): 
@@ -4422,18 +4601,9 @@ class G2CmdShell(cmd.Cmd):
         if pretty_table_style_available: 
             tableObject.set_style(SINGLE_BORDER)
         else:
-            tableObject.hrules = PRETTY_TABLE_ALL
-            tableObject.horizontal_char = "-"
-            tableObject.vertical_char = "¦"
-            tableObject.junction_char = "+"
-            tableObject.top_junction_char = "-"
-            tableObject.bottom_junction_char = "-"
-            tableObject.right_junction_char = "¦"
-            tableObject.left_junction_char = "+"
-            tableObject.top_right_junction_char = "+"
-            tableObject.top_left_junction_char = "+"
-            tableObject.bottom_right_junction_char = "+"
-            tableObject.bottom_left_junction_char = "+"
+            tableObject.horizontal_char = '\u2500'
+            tableObject.vertical_char = '\u2502'
+            tableObject.junction_char = '\u253C'
         tableObject.field_names = columnHeaderList
  
         totalRowCnt = 0
@@ -4476,9 +4646,11 @@ class G2CmdShell(cmd.Cmd):
         return
 
     # -----------------------------
-    def do_scroll(self,arg):
+    def do_scroll(self, arg = None, **kwargs):
         '\nLoads the last table rendered into the linux less viewer where you can use the arrow keys to scroll ' \
         '\n up and down, left and right, until you type Q to quit.\n'
+
+        search = kwargs.get('search')
 
         #--note: the F allows less to auto quit if output fits on screen
         #-- if they purposely went into scroll mode, we should not auto-quit!
@@ -4486,6 +4658,8 @@ class G2CmdShell(cmd.Cmd):
             lessOptions = 'FMXSR'
         else:
             lessOptions = 'MXSR'
+        if search:
+            lessOptions +'/' + search
 
         #--try pipe to less on small enough files (pipe buffer usually 1mb and fills up on large entity displays)
         less = subprocess.Popen(["less", "-FMXSR"], stdin=subprocess.PIPE)
@@ -4706,19 +4880,26 @@ def formatMatchData(matchDict, colorscheme = None):
         matchStr = colorize('not found!', 'bg.red,fg.white')
     else:
         if colorscheme:
-            matchKeySegments = []
+            goodSegments = []
+            badSegments = []
             priorKey = ''
             keyColor = 'fg.green'
             for key in re.split('(\+|\-)', matchDict['matchKey']):
                 if key in ('+',''): 
                     priorKey = '+'
-                    keyColor = colorscheme['good']
                 elif key == '-':
                     priorKey = '-'
-                    keyColor = colorscheme['bad']
+                elif priorKey == '-':
+                    badSegments.append(key)
                 else:
-                    matchKeySegments.append(colorize(priorKey+key, keyColor))
-            matchStr = ''.join(matchKeySegments)
+                    goodSegments.append(key)
+            if goodSegments:
+                matchStr = colorize('+'.join(goodSegments), colorscheme['good'])
+            else:
+                matchStr = ''
+            if badSegments:
+                matchStr += colorize('-' + '-'.join(badSegments), colorscheme['bad'])
+
         else:
             matchStr = matchDict['matchKey']
 
