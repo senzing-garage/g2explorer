@@ -594,7 +594,7 @@ class G2CmdShell(cmd.Cmd):
             printWithNewLines('file %s not found!' % (statpackFileName), 'B')
             return
 
-        try: jsonData = json.load(open(statpackFileName), encoding="utf-8")
+        try: jsonData = json.load(open(statpackFileName, encoding="utf-8"))
         except:
             printWithNewLines('Invalid json in %s' % statpackFileName, 'B')
             return
