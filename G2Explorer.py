@@ -706,7 +706,7 @@ class G2CmdShell(cmd.Cmd):
             print('\nfile not found!\n')
             return
 
-        try: jsonData = json.load(open(statpackFileName), encoding="utf-8")
+        try: jsonData = json.load(open(statpackFileName, encoding="utf-8"))
         except ValueError as err:
             print(f"\nError in {statpackFileName} ...\n\t{err}\n")
             return
