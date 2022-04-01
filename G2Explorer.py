@@ -17,12 +17,6 @@ import readline
 import atexit
 from io import StringIO
 
-# try: 
-#     from rich.table import Table
-#     from rich.console import Console
-#     has_rich = True
-# except: has_rich = False
- 
 try: 
     from prettytable import PrettyTable 
     from prettytable import ALL as PRETTY_TABLE_ALL
@@ -57,168 +51,201 @@ except:
         sys.exit(1)
 
 # ==============================
-class colors: 
-    code = {}
+class Colors: 
+
+    @classmethod
+    def apply(cls, in_string, color_list = None):
+        ''' apply list of colors to a string '''
+        if color_list: 
+            prefix = ''.join([getattr(cls,i.strip().upper()) for i in color_list.split(',')])
+            suffix = cls.RESET
+            return f'{prefix}{in_string}{suffix}'
+        return in_string
+
+    @classmethod
+    def set_theme(cls, theme):
+        #--best for dark backgrounds
+        if theme.upper() == 'DEFAULT':
+            cls.TABLE_TITLE = cls.FG_GREY42
+            cls.ROW_TITLE = cls.FG_GREY42
+            cls.COLUMN_HEADER = cls.FG_GREY42 
+            cls.ENTITY_COLOR = cls.FG_MEDIUMORCHID1
+            cls.DSRC_COLOR = cls.FG_SALMON
+            cls.ATTR_COLOR = cls.FG_CORNFLOWERBLUE
+            cls.GOOD = cls.FG_CHARTREUSE3
+            cls.BAD = cls.FG_RED3
+            cls.CAUTION = cls.FG_GOLD3
+            cls.HIGHLIGHT1 = cls.FG_DEEPPINK4
+            cls.HIGHLIGHT2 = cls.FG_DEEPSKYBLUE1
+        elif theme.upper() == 'LIGHT':
+            cls.TABLE_TITLE = cls.FG_LIGHTBLACK
+            cls.ROW_TITLE = cls.FG_LIGHTBLACK
+            cls.COLUMN_HEADER = cls.FG_LIGHTBLACK # + cls.ITALICS
+            cls.ENTITY_COLOR = cls.FG_LIGHTMAGENTA + cls.BOLD
+            cls.DSRC_COLOR = cls.FG_LIGHTYELLOW + cls.BOLD
+            cls.ATTR_COLOR = cls.FG_LIGHTCYAN + cls.BOLD
+            cls.GOOD = cls.FG_LIGHTGREEN
+            cls.BAD = cls.FG_LIGHTRED
+            cls.CAUTION = cls.FG_LIGHTYELLOW
+            cls.HIGHLIGHT1 = cls.FG_LIGHTMAGENTA
+            cls.HIGHLIGHT2 = cls.FG_LIGHTCYAN
+        elif theme.upper() == 'DARK':
+            cls.TABLE_TITLE = cls.FG_LIGHTBLACK
+            cls.ROW_TITLE = cls.FG_LIGHTBLACK
+            cls.COLUMN_HEADER = cls.FG_LIGHTBLACK # + cls.ITALICS
+            cls.ENTITY_COLOR = cls.FG_MAGENTA + cls.BOLD
+            cls.DSRC_COLOR = cls.FG_YELLOW + cls.BOLD
+            cls.ATTR_COLOR = cls.FG_CYAN + cls.BOLD
+            cls.GOOD = cls.FG_GREEN
+            cls.BAD = cls.FG_RED
+            cls.CAUTION = cls.FG_YELLOW
+            cls.HIGHLIGHT1 = cls.FG_MAGENTA
+            cls.HIGHLIGHT2 = cls.FG_CYAN
+
     #--styles
-    code['reset'] = '\033[0m'
-    code['bold'] ='\033[01m'
-    code['dim'] = '\033[02m'
-    code['italics'] = '\033[03m'
-    code['underline'] = '\033[04m'
-    code['blink'] = '\033[05m'
-    code['reverse'] = '\033[07m'
-    code['strikethrough'] = '\033[09m'
-    code['invisible'] = '\033[08m'
+    RESET = '\033[0m'
+    BOLD ='\033[01m'
+    DIM = '\033[02m'
+    ITALICS = '\033[03m'
+    UNDERLINE = '\033[04m'
+    BLINK = '\033[05m'
+    REVERSE = '\033[07m'
+    STRIKETHROUGH = '\033[09m'
+    INVISIBLE = '\033[08m'
     #--foregrounds
-    code['fg.black'] = '\033[30m'
-    code['fg.white'] = '\033[97m'
-    code['fg.blue'] = '\033[34m'
-    code['fg.magenta'] = '\033[35m'
-    code['fg.cyan'] = '\033[36m'
-    code['fg.yellow'] = '\033[33m'
-    code['fg.green'] = '\033[32m'
-    code['fg.red'] = '\033[31m'
-    code['fg.lightblack'] = '\033[90m'
-    code['fg.lightwhite'] = '\033[37m'
-    code['fg.lightblue'] = '\033[94m'
-    code['fg.lightmagenta'] = '\033[95m'
-    code['fg.lightcyan'] = '\033[96m'
-    code['fg.lightyellow'] = '\033[93m'
-    code['fg.lightgreen'] = '\033[92m'
-    code['fg.lightred'] = '\033[91m'
+    FG_BLACK = '\033[30m'
+    FG_WHITE = '\033[97m'
+    FG_BLUE = '\033[34m'
+    FG_MAGENTA = '\033[35m'
+    FG_CYAN = '\033[36m'
+    FG_YELLOW = '\033[33m'
+    FG_GREEN = '\033[32m'
+    FG_RED = '\033[31m'
+    FG_LIGHTBLACK = '\033[90m'
+    FG_LIGHTWHITE = '\033[37m'
+    FG_LIGHTBLUE = '\033[94m'
+    FG_LIGHTMAGENTA = '\033[95m'
+    FG_LIGHTCYAN = '\033[96m'
+    FG_LIGHTYELLOW = '\033[93m'
+    FG_LIGHTGREEN = '\033[92m'
+    FG_LIGHTRED = '\033[91m'
     #--backgrounds
-    code['bg.black'] = '\033[40m'
-    code['bg.white'] = '\033[107m'
-    code['bg.blue'] = '\033[44m'
-    code['bg.magenta'] = '\033[45m'
-    code['bg.cyan'] = '\033[46m'
-    code['bg.yellow'] = '\033[43m'
-    code['bg.green'] = '\033[42m'
-    code['bg.red'] = '\033[41m'
-    code['bg.lightblack'] = '\033[100m'
-    code['bg.lightwhite'] = '\033[47m'
-    code['bg.lightblue'] = '\033[104m'
-    code['bg.lightmagenta'] = '\033[105m'
-    code['bg.lightcyan'] = '\033[106m'
-    code['bg.lightyellow'] = '\033[103m'
-    code['bg.lightgreen'] = '\033[102m'
-    code['bg.lightred'] = '\033[101m'
+    BG_BLACK = '\033[40m'
+    BG_WHITE = '\033[107m'
+    BG_BLUE = '\033[44m'
+    BG_MAGENTA = '\033[45m'
+    BG_CYAN = '\033[46m'
+    BG_YELLOW = '\033[43m'
+    BG_GREEN = '\033[42m'
+    BG_RED = '\033[41m'
+    BG_LIGHTBLACK = '\033[100m'
+    BG_LIGHTWHITE = '\033[47m'
+    BG_LIGHTBLUE = '\033[104m'
+    BG_LIGHTMAGENTA = '\033[105m'
+    BG_LIGHTCYAN = '\033[106m'
+    BG_LIGHTYELLOW = '\033[103m'
+    BG_LIGHTGREEN = '\033[102m'
+    BG_LIGHTRED = '\033[101m'
+    #--extended
+    FG_DARKORANGE = '\033[38;5;208m'
+    FG_SYSTEMBLUE = '\033[38;5;12m'    #--darker
+    FG_DODGERBLUE2 = '\033[38;5;27m'   #--lighter
+    FG_PURPLE = '\033[38;5;93m'
+    FG_DARKVIOLET = '\033[38;5;128m'
+    FG_MAGENTA3 = '\033[38;5;164m'
+    FG_GOLD3 = '\033[38;5;178m'
+    FG_YELLOW1 = '\033[38;5;226m'
+    FG_SKYBLUE1 = '\033[38;5;117m'
+    FG_SKYBLUE2 = '\033[38;5;111m'
+    FG_ROYALBLUE1 = '\033[38;5;63m'
+    FG_CORNFLOWERBLUE = '\033[38;5;69m'
+    FG_HOTPINK = '\033[38;5;206m'
+    FG_DEEPPINK4 = '\033[38;5;89m'
+    FG_MAGENTA3 = '\033[38;5;164m'
+    FG_SALMON = '\033[38;5;209m'
+    FG_MEDIUMORCHID1 = '\033[38;5;207m'
+    FG_NAVAJOWHITE3 = '\033[38;5;144m'
+    FG_DARKGOLDENROD = '\033[38;5;136m'
+    FG_STEELBLUE1 = '\033[38;5;81m'
+    FG_GREY42 = '\033[38;5;242m'
+    FG_INDIANRED = '\033[38;5;131m'
+    FG_DEEPSKYBLUE1 = '\033[38;5;39m'
+    FG_ORANGE3 = '\033[38;5;172m'
+    FG_RED3 = '\033[38;5;124m'
+    FG_SEAGREEN2 = '\033[38;5;83m'
+    FG_YELLOW3 = '\033[38;5;184m'
+    FG_CYAN3 = '\033[38;5;43m'
+    FG_CHARTREUSE3 = '\033[38;5;70m'
+    FG_ORANGERED1 = '\033[38;5;202m'
 
-    wheel = {}
-    for color in code.keys():
-        if color.startswith('fg.') and color not in ('fg.black','fg.white', 'fg.lightwhite','fg.lightblack'):
-            wheel[len(wheel)] = color
-    #for color1 in ['bg.black', 'bg.white']:
-    #    for color2 in code.keys():
-    #        if color2.startswith('fg.') and color2[2:] != color1[2:]:
-    #            wheel[len(wheel)] = ','.join([color1, color2])
+# ------------------------------
+def colorize(in_string, color_list = 'None'):
+    return Colors.apply(in_string, color_list)
 
-def colorize(string, colorList = None):
-    if colorList: 
-        prefix = ''.join([colors.code[i.strip().lower()] for i in colorList.split(',')])
-        suffix = colors.code['reset']
-        return f'{prefix}{string}{suffix}'
-    return string
+# ------------------------------
+def colorize_prompt(prompt_str):
+    #(P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit
+    for str1 in 'PNGDHWEQCFSO':
+        prompt_str = prompt_str.replace(f"({str1})",f"({Colors.apply(str1, 'bold')})")
+    return prompt_str
 
-# ==============================
-class ColoredTable(PrettyTable):
+# -----------------------------
+def colorize_attr(attr_str, attr_color='attr_color'):
+    if ':' in attr_str:
+        attr_name = attr_str[0:attr_str.find(':')+1]
+        attr_value = attr_str[attr_str.find(':')+1:].strip()
+        return colorize(attr_name, attr_color) + ' ' + attr_value
+    return colorize(attr_str, attr_color)
 
-    def __init__(self, field_names=None, **kwargs):
-        new_options = ['title_color', 'header_color', 'title_justify']
+# -----------------------------
+def colorize_dsrc(dsrc_str):
+    if ':' in dsrc_str:
+        return colorize_attr(dsrc_str, 'dsrc_color')
+    return colorize(dsrc_str, 'dsrc_color')
 
-        super(ColoredTable, self).__init__(field_names, **kwargs)
+# -----------------------------
+def colorize_entity(entity_str, added_color = None):
+    entity_color = 'entity_color' + (',' + added_color if added_color else '')
+    if ':' in str(entity_str):
+        return colorize_attr(entity_str, entity_color)
+    return colorize(entity_str, entity_color)
 
-        self.title_color = kwargs['title_color'] or None
-        self.header_color = kwargs['header_color'] or None
-        self.title_justify = kwargs['title_justify'] or 'c'
-
-        self._options.extend(new_options)
-
-        # hrule styles
-        self.FRAME = 0
-        self.ALL = 1
-
-    def _stringify_title(self, title, options):
-
-        lines = []
-        lpad, rpad = self._get_padding_widths(options)
-        if options["border"]:
-            if options["vrules"] == self.ALL:
-                options["vrules"] = self.FRAME
-                lines.append(self._stringify_hrule(options))
-                options["vrules"] = self.ALL
-            elif options["vrules"] == self.FRAME:
-                lines.append(self._stringify_hrule(options))
-        bits = []
-        endpoint = options["vertical_char"] if options["vrules"] in (self.ALL, self.FRAME) else " "
-        bits.append(endpoint)
-        title = " " * lpad + title + " " * rpad
-
-        if options['title_color']:
-            bits.append(colorize(self._justify(title, len(self._hrule) - 2, options['title_justify']), options['title_color']))
+# -----------------------------
+def colorize_match_data(matchDict):
+    if not matchDict['matchKey']:
+        matchStr = colorize('not found!', 'bg_red,fg_white')
+    else:
+        goodSegments = []
+        badSegments = []
+        priorKey = ''
+        keyColor = 'fg_green'
+        for key in re.split('(\+|\-)', matchDict['matchKey']):
+            if key in ('+',''): 
+                priorKey = '+'
+            elif key == '-':
+                priorKey = '-'
+            elif priorKey == '-':
+                badSegments.append(key)
+            else:
+                goodSegments.append(key)
+        if goodSegments:
+            matchStr = colorize('+'.join(goodSegments), 'good')
         else:
-            bits.append(self._justify(title, len(self._hrule) - 2, options['title_justify']))
+            matchStr = ''
+        if badSegments:
+            matchStr += colorize('-' + '-'.join(badSegments), 'bad')
 
-        bits.append(endpoint)
-        lines.append("".join(bits))
-        return "\n".join(lines)
 
-    def _stringify_header(self, options):
+    if 'ruleCode' in matchDict:
+        matchStr += (f"\n {colorize(matchDict['ruleCode'], 'dim')}")
 
-        bits = []
-        lpad, rpad = self._get_padding_widths(options)
-        if options["border"]:
-            if options["hrules"] in (self.ALL, self.FRAME):
-                bits.append(self._hrule)
-                bits.append("\n")
-            if options["vrules"] in (self.ALL, self.FRAME):
-                bits.append(options["vertical_char"])
-            else:
-                bits.append(" ")
-        # For tables with no data or field names
-        if not self._field_names:
-            if options["vrules"] in (self.ALL, self.FRAME):
-                bits.append(options["vertical_char"])
-            else:
-                bits.append(" ")
-        for field, width, in zip(self._field_names, self._widths):
-            if options["fields"] and field not in options["fields"]:
-                continue
-            if self._header_style == "cap":
-                fieldname = field.capitalize()
-            elif self._header_style == "title":
-                fieldname = field.title()
-            elif self._header_style == "upper":
-                fieldname = field.upper()
-            elif self._header_style == "lower":
-                fieldname = field.lower()
-            else:
-                fieldname = field
+    if 'entityId' in matchDict:
+        print(json.dumps(matchDict, indent=4))
+        input('wait')
 
-            #if options['header_color']:
-            #    fieldname = colorify(fieldname, options['header_color'])
-            if options['header_color']:
-                bits.append(colorize(" " * lpad
-                            + self._justify(fieldname, width, self._align[field])
-                            + " " * rpad, options['header_color']))
-            else:
-                bits.append(" " * lpad
-                            + self._justify(fieldname, width, self._align[field])
-                            + " " * rpad)
-            if options["border"]:
-                if options["vrules"] == self.ALL:
-                    bits.append(options["vertical_char"])
-                else:
-                    bits.append(" ")
-        # If vrules is FRAME, then we just appended a space at the end
-        # of the last field, when we really want a vertical character
-        if options["border"] and options["vrules"] == self.FRAME:
-            bits.pop()
-            bits.append(options["vertical_char"])
-        if options["border"] and options["hrules"] is not None:
-            bits.append("\n")
-            bits.append(self._hrule)
-        return "".join(bits)
+        matchStr += (f" to {colorize_entity(matchDict['entityId'])}")
+
+    return matchStr
 
 # ==============================
 class Node(object):
@@ -260,7 +287,7 @@ class Node(object):
             node_desc = next_node.node_desc
             if node_desc and filter_str:    
                 if filter_str in node_desc:
-                    node_desc = node_desc.replace(filter_str, colorize(filter_str, 'bg.red, fg.white'))
+                    node_desc = node_desc.replace(filter_str, colorize(filter_str, 'bg_red, fg_white'))
                     filter_str_in_desc = True
 
             for line in node_desc.split('\n'):
@@ -274,7 +301,7 @@ class Node(object):
                 node_text = next_node.node_text
                 if filter_str:
                     if filter_str in node_text:
-                        node_text = node_text.replace(filter_str, colorize(filter_str, 'bg.red, fg.white'))
+                        node_text = node_text.replace(filter_str, colorize(filter_str, 'bg_red, fg_white'))
                     elif not filter_str_in_desc:
                         node_text = ''
                 for line in node_text.split('\n'):
@@ -292,6 +319,7 @@ class Node(object):
 # ==============================
 class G2CmdShell(cmd.Cmd):
 
+    # -----------------------------
     def __init__(self):
         cmd.Cmd.__init__(self)
         readline.set_completer_delims(' ')
@@ -415,7 +443,7 @@ class G2CmdShell(cmd.Cmd):
 
         #--default settings for data and cross sources summary reports
         self.configurable_settings_list = [
-            {'setting': 'color_scheme', 'values': ['light', 'dark'], 'description': 'light works better on dark backgrounds and vice-versa'}, 
+            {'setting': 'color_scheme', 'values': ['default', 'light', 'dark'], 'description': 'light works better on dark backgrounds and vice-versa'}, 
             {'setting': 'statistic_level', 'values': ['record', 'entity'], 'description': 'sets the statistical point of view of the data and crossSourceSummary reports'}, 
             {'setting': 'data_source_suppression', 'values': ['off', 'on'], 'description': 'restricts the data and crossSourceSummary reports to only applicable data sources'},
             {'setting': 'show_relations_on_get', 'values': ['off', 'on'], 'description': 'always display relationships if any with each get of an entity ... or not!'}
@@ -435,11 +463,13 @@ class G2CmdShell(cmd.Cmd):
         self.histDisable = hist_disable
         self.histCheck()
 
-    #Hide functions from available list of Commands. Seperate help sections for some
+    # -----------------------------
     def get_names(self):
+        '''hides functions from available list of Commands. Seperate help sections for some '''
         return [n for n in dir(self.__class__) if n not in self.__hidden_methods]
 
-    #Override function from cmd module to make command completion case insensitive
+    # -----------------------------
+    # Override function from cmd module to make command completion case insensitive
     def completenames(self, text, *ignored):
         dotext = 'do_'+text
         return  [a[3:] for a in self.get_names() if a.lower().startswith(dotext.lower())]
@@ -473,57 +503,23 @@ class G2CmdShell(cmd.Cmd):
                 for item in traceback.format_tb(traceback_):
                     printWithNewLines(item)
 
+    # -----------------------------
     def postloop(self):
         try:
             with open(self.settingsFileName, 'w') as f:
                 json.dump(self.current_settings, f)
         except: pass
 
+    # -----------------------------
     def help_KnowledgeCenter(self):
         printWithNewLines('Senzing Knowledge Center: https://senzing.zendesk.com/hc/en-us', 'B')
 
+    # -----------------------------
     def help_Support(self):
         printWithNewLines('Senzing Support Request: https://senzing.zendesk.com/hc/en-us/requests/new', 'B')
 
-
-    def help_Arguments(self):
-        print(
-              '\nWhere you see <value> in the help output replace <value> with your value.\n' \
-              '\nFor example the help for addAttribute is: \n' \
-              '\taddAttribute {"attribute": "<attribute_name>"}\n' \
-              '\nReplace <attribute_name> to be the name of your new attribute\n' \
-              '\taddAttribute {"attribute": "myNewAttribute"}\n' \
-              )
-
-    def help_Shell(self):
-        printWithNewLines('Run OS shell commands: ! <command>', 'B')
-
-    def help_History(self):
-        printWithNewLines(textwrap.dedent(f'''\
-            - Use shell like history, requires Python readline module.
-
-            - Tries to create a history file in the users home directory for use across instances of G2ConfigTool. 
-
-            - If a history file can't be created in the users home, /tmp is tried for temporary session history. 
-
-            - Ctrl-r can be used to search history when history is available
-
-            - Commands to manage history
-
-                - histClear = Clears the current working session history and the history file. This deletes all history, be careful!
-                - histDedupe = The history can accumulate duplicate entries over time, use this to remove them
-                - histShow = Display all history
-
-            - History Status: 
-                - Readline available: {self.readlineAvail}
-                - History available: {self.histAvail}
-                - History file: {self.histFileName}
-                - History file error: {self.histFileError}
-            '''), 'S')
-
-
+    # -----------------------------
     def histCheck(self):
-        '''  '''
     
         self.histFileName = None
         self.histFileError = None
@@ -561,41 +557,8 @@ class G2CmdShell(cmd.Cmd):
                 self.histFileError = None
                 self.histAvail = True   
 
-
-    def do_histDedupe(self, arg):
-
-        if self.histAvail:
-            if input('\nThis will de-duplicate both this session history and the history file, are you sure? (y/n)  ') in ['y','Y', 'yes', 'YES']:
-    
-                with open(self.histFileName) as hf:
-                    linesIn = (line.rstrip() for line in hf)
-                    uniqLines = OrderedDict.fromkeys( line for line in linesIn if line )
-    
-                    readline.clear_history()
-                    for ul in uniqLines:
-                        readline.add_history(ul)
-    
-                printWithNewLines('Session history and history file both deduplicated.', 'B')
-            else:
-                print()
-        else:
-            printWithNewLines('History isn\'t available in this session.', 'B')
-
-
-    def do_histClear(self, arg):
-
-        if self.histAvail:
-            if input('\nThis will clear both this session history and the history file, are you sure? (y/n)  ') in ['y','Y', 'yes', 'YES']:
-                readline.clear_history()
-                readline.write_history_file(self.histFileName)
-                printWithNewLines('Session history and history file both cleared.', 'B')
-            else:
-                print()
-        else:
-            printWithNewLines('History isn\'t available in this session.', 'B')
-
-
-    def do_histShow(self, arg):
+    # -----------------------------
+    def do_history(self, arg):
 
         if self.histAvail:
             print()
@@ -615,14 +578,14 @@ class G2CmdShell(cmd.Cmd):
     def help_set (self):
         print(textwrap.dedent(f'''\
 
-            {colorize('syntax:', self.colors['highlight1'])} 
+            {colorize('syntax:', 'highlight1')} 
                 set <setting> <value> 
 
-            {colorize('settings:', self.colors['highlight1'])} '''))
-        print(colorize(f"    {'setting':<25} {'[possible values]':<20} {'current':<11} {'description'}", 'bold'))
+            {colorize('settings:', 'highlight1')} '''))
+        print(colorize(f"    {'setting':<23} {'[possible values]':<22} {'current':<8} {'description'}", 'bold'))
         for setting_data in self.configurable_settings_list:
-            current_value = colorize(self.current_settings[setting_data['setting']], self.colors['highlight2'])
-            print(f"    {setting_data['setting']:<25} {'[' + ', '.join(setting_data['values']) + ']':<20} {current_value:<20} {setting_data['description']}")
+            current_value = colorize(self.current_settings[setting_data['setting']], 'highlight2')
+            print(f"    {setting_data['setting']:<23} {'[' + ', '.join(setting_data['values']) + ']':<22} {current_value:<22} {setting_data['description']}")
         print()
 
     # -----------------------------
@@ -637,60 +600,18 @@ class G2CmdShell(cmd.Cmd):
 
         arg_list = arg.split()
         if len(arg_list) != 2 or (arg_list[0] not in settings_dict) or (arg_list[1] not in settings_dict[arg_list[0]]):
-            print('['+arg_list[0]+']', arg_list[0] in [item['setting'] for item in self.configurable_settings_list])
-            print(colorize('\ninvalid syntax or settings\n', 'fg.red'))
-            self.help_set()
+            #print('['+arg_list[0]+']', arg_list[0] in [item['setting'] for item in self.configurable_settings_list])
+            print(colorize('\ninvalid setting\n', 'fg_red'))
+            #self.help_set()
             return
 
         self.current_settings[arg_list[0]] = arg_list[1]
         if arg_list[0] == 'color_scheme':
-            self.set_color_scheme(arg_list[1])
-
+            Colors.set_theme(arg_list[1])
+ 
     # -----------------------------
-    def set_color_scheme(self,arg):
-        self.colors['none'] = None
-        if arg.upper() == 'LIGHT':
-            self.current_settings['colorScheme'] = 'light'
-            self.colors['entityTitle'] = 'fg.lightmagenta'
-            self.colors['entityColumns'] = 'bg.lightblack,fg.white'
-            self.colors['tableTitle'] = 'fg.lightblue'
-            self.colors['rowtitle'] = 'fg.lightblue'
-            self.colors['columnHeader'] = 'fg.lightblue,italics'
-            self.colors['entityid'] = 'fg.lightmagenta,bold'
-            self.colors['datasource'] = 'fg.lightyellow,bold'
-            self.colors['good'] = 'fg.lightgreen'
-            self.colors['bad'] = 'fg.lightred'
-            self.colors['caution'] = 'fg.lightyellow'
-            self.colors['highlight1'] = 'fg.lightcyan'
-            self.colors['highlight2'] = 'fg.lightmagenta'
-
-        #--best for light backgrounds
-        elif arg.upper() == 'DARK':
-            self.current_settings['colorScheme'] = 'dark'
-            self.colors['entityTitle'] = 'fg.magenta'
-            self.colors['entityColumns'] = 'bg.lightblack,fg.white'
-            self.colors['tableTitle'] = 'fg.blue'
-            self.colors['rowtitle'] = 'fg.blue'
-            self.colors['columnHeader'] = 'fg.blue,italics'
-            self.colors['entityid'] = 'fg.magenta,bold'
-            self.colors['datasource'] = 'fg.yellow,bold'
-            self.colors['good'] = 'fg.green'
-            self.colors['bad'] = 'fg.red'
-            self.colors['caution'] = 'fg.yellow'
-            self.colors['highlight1'] = 'fg.cyan'
-            self.colors['highlight2'] = 'fg.magenta'
-
-    # -----------------------------
-    def do_versions (self,arg):
-        '\nDisplays current and snapshot version information.\n'
-        print()
-        print('current api version is:', apiVersion['BUILD_VERSION'])
-        if self.snapshotFile:
-            if self.snapshotData and 'API_VERSION' in self.snapshotData: 
-                print('snapshot api version was:', self.snapshotData['API_VERSION'])
-            if self.snapshotData and 'RUN_DATE' in self.snapshotData: 
-                print('snapshot run date and time was:', self.snapshotData['RUN_DATE'])
-        print()
+    def do_version (self,arg):
+        print(f"\nSenzing api version is: {apiVersion['BUILD_VERSION']}\n")
 
     # -----------------------------
     def do_load (self,arg):
@@ -706,7 +627,7 @@ class G2CmdShell(cmd.Cmd):
             print('\nfile not found!\n')
             return
 
-        try: jsonData = json.load(open(statpackFileName), encoding="utf-8")
+        try: jsonData = json.load(open(statpackFileName, encoding="utf-8"))
         except ValueError as err:
             print(f"\nError in {statpackFileName} ...\n\t{err}\n")
             return
@@ -741,56 +662,70 @@ class G2CmdShell(cmd.Cmd):
         return completions
 
     # -----------------------------
-    def xx_perfStats (self,arg):
-        '\nDisplays the performance stats of the snapshot'
-
-        if not self.snapshotData or 'PERF' not in self.snapshotData:
-            printWithNewLines('Performance stats not available on the loaded snapshot file', 'B')
-            return
-
-        print('\nPerformance statistics ...')
-        for stat in self.snapshotData['PERF']:
-            print(('  ' + stat + ' ' + '.' * 30)[0:30] + ' ' + (str(self.snapshotData['PERF'][stat])))
-
-        print()
-
-    # -----------------------------
     def do_quickLook (self,arg):
         '\nDisplays current data source stats without a snapshot'
-
         g2_diagnostic_module = G2Diagnostic()
         if apiVersion['VERSION'][0:1] == '2':
             g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
         else: #--eventually deprecate the above
             g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
-
         try: 
             response = bytearray() 
             g2_diagnostic_module.getDataSourceCounts(response)
             response = response.decode() if response else ''
         except G2Exception as err:
             print(err)
+        g2_diagnostic_module.destroy()
+
         jsonResponse = json.loads(response)
 
         tblTitle = 'Data source counts'
         tblColumns = []
         tblColumns.append({'name': 'id', 'width': 5, 'align': 'center'})
         tblColumns.append({'name': 'DataSource', 'width': 30, 'align': 'left'})
-        tblColumns.append({'name': 'EntityType', 'width': 30, 'align': 'left'})
         tblColumns.append({'name': 'ActualRecordCount', 'width': 20, 'align': 'right'})
         tblColumns.append({'name': 'DistinctRecordCount', 'width': 20, 'align': 'right'})
         tblRows = []
         for row in jsonResponse:
             entityType = '' if row['ETYPE_CODE'] == 'GENERIC' or row['ETYPE_CODE'] == row['DSRC_CODE'] else ''
-            tblRows.append([colorize(row['DSRC_ID'], self.colors['rowtitle']),
-                            colorize(row['DSRC_CODE'], self.colors['datasource']),
-                            colorize(entityType, self.colors['datasource']),
+            tblRows.append([colorize(row['DSRC_ID'], 'row_title'),
+                            colorize_dsrc(row['DSRC_CODE']),
                             row['DSRC_RECORD_COUNT'],
                             row['OBS_ENT_COUNT']])
         self.renderTable(tblTitle, tblColumns, tblRows)
 
-        g2_diagnostic_module.destroy()
+    # -----------------------------
+    def move_pointer(self, reply, current_item, max_items):
+        ''' moves the sample record pointer for all reports '''
+        if reply.upper().startswith('P'): #--previous
+            if current_item == 0:
+                input('\nNo prior records, press enter to continue')
+            else:
+                return current_item - 1
+        elif reply.upper().startswith('N'): #--next
+            if current_item == max_items - 1:
+                input('\nno more records, press enter to continue')
+            else:
+                return current_item + 1
+        elif reply.upper().startswith('G'): #--goto
+            reply = reply[1:]
+            if not reply:
+                reply = input('\nSample item number to go to? ')
+                if reply:
+                    removeFromHistory()
+            if reply:
+                if reply.isnumeric() and int(reply) > 0 and int(reply) <= max_items:
+                    return int(reply) - 1
+                else:
+                    print('\nInvalid sample item number for this sample set!\n')
+        return current_item
 
+    # -----------------------------
+    def export_report_sample(self, reply, currentRecords, fileName):
+        if 'TO ' in reply.upper():
+            fileName = reply[reply.upper().find('TO') + 2:].strip()
+        if fileName:
+            self.do_export(','.join(currentRecords) + ' to ' + fileName)
 
     # -----------------------------
     def do_auditSummary (self,arg):
@@ -808,10 +743,10 @@ class G2CmdShell(cmd.Cmd):
             return
 
         categoryColors = {}
-        categoryColors['MERGE'] = self.colors['good']
-        categoryColors['SPLIT'] = self.colors['bad']
-        categoryColors['SPLIT+MERGE'] = 'fg.red,bg.green'
-        categoryColors['unknown'] = 'bg.red,fg.white'
+        categoryColors['MERGE'] = 'good'
+        categoryColors['SPLIT'] = 'bad'
+        categoryColors['SPLIT+MERGE'] = 'fg_red,bg_green'
+        categoryColors['unknown'] = 'bg_red,fg_white'
 
         #--display the summary if no arguments
         if not arg:
@@ -838,17 +773,17 @@ class G2CmdShell(cmd.Cmd):
             tblRows = []
 
             row = []
-            row.append(colorize('Prior Count', self.colors['highlight1']))
+            row.append(colorize('Prior Count', 'highlight2'))
             row.append(fmtStatistic(self.auditData['ENTITY']['STANDARD_COUNT']) if 'ENTITY' in self.auditData else '0')
             row.append(fmtStatistic(self.auditData['CLUSTERS']['STANDARD_COUNT']))
             row.append(fmtStatistic(self.auditData['PAIRS']['STANDARD_COUNT']))
             row.append('')
-            row.append(colorize('Prior Positives', self.colors['highlight1']))
+            row.append(colorize('Prior Positives', 'highlight2'))
             row.append(colorize(fmtStatistic(self.auditData['ACCURACY']['PRIOR_POSITIVE']), None))
             tblRows.append(row)
 
             row = []
-            row.append(colorize('Newer Count', self.colors['highlight1']))
+            row.append(colorize('Newer Count', 'highlight2'))
             row.append(fmtStatistic(self.auditData['ENTITY']['RESULT_COUNT']) if 'ENTITY' in self.auditData else '0')
             row.append(fmtStatistic(self.auditData['CLUSTERS']['RESULT_COUNT']))
             row.append(fmtStatistic(self.auditData['PAIRS']['RESULT_COUNT']))
@@ -858,7 +793,7 @@ class G2CmdShell(cmd.Cmd):
             tblRows.append(row)
 
             row = []
-            row.append(colorize('Common Count', self.colors['highlight1']))
+            row.append(colorize('Common Count', 'highlight2'))
             row.append(fmtStatistic(self.auditData['ENTITY']['COMMON_COUNT']) if 'ENTITY' in self.auditData else '0')
             row.append(fmtStatistic(self.auditData['CLUSTERS']['COMMON_COUNT']))
             row.append(fmtStatistic(self.auditData['PAIRS']['COMMON_COUNT']))
@@ -870,30 +805,30 @@ class G2CmdShell(cmd.Cmd):
             row = []
             row.append(auditCategories[0][0])
             row.append(auditCategories[0][1])
-            row.append('') #(colorize(self.auditData['CLUSTERS']['INCREASE'], self.colors['good']) if self.auditData['CLUSTERS']['INCREASE'] else '')
-            row.append('') #(colorize(self.auditData['PAIRS']['INCREASE'], self.colors['good']) if self.auditData['PAIRS']['INCREASE'] else '')
+            row.append('') #(colorize(self.auditData['CLUSTERS']['INCREASE'], 'good') if self.auditData['CLUSTERS']['INCREASE'] else '')
+            row.append('') #(colorize(self.auditData['PAIRS']['INCREASE'], 'good') if self.auditData['PAIRS']['INCREASE'] else '')
             row.append('')
-            row.append(colorize('Precision', self.colors['highlight1']))
+            row.append(colorize('Precision', 'highlight2'))
             row.append(colorize(self.auditData['ACCURACY']['PRECISION'], None))
             tblRows.append(row)
 
             row = []
             row.append(auditCategories[1][0])
             row.append(auditCategories[1][1])
-            row.append('') #(colorize(self.auditData['CLUSTERS']['DECREASE'], self.colors['bad']) if self.auditData['CLUSTERS']['DECREASE'] else '')
-            row.append('') #(colorize(self.auditData['PAIRS']['DECREASE'], self.colors['bad']) if self.auditData['PAIRS']['DECREASE'] else '')
+            row.append('') #(colorize(self.auditData['CLUSTERS']['DECREASE'], 'bad') if self.auditData['CLUSTERS']['DECREASE'] else '')
+            row.append('') #(colorize(self.auditData['PAIRS']['DECREASE'], 'bad') if self.auditData['PAIRS']['DECREASE'] else '')
             row.append('')
-            row.append(colorize('Recall', self.colors['highlight1']))
+            row.append(colorize('Recall', 'highlight2'))
             row.append(colorize(self.auditData['ACCURACY']['RECALL'], None))
             tblRows.append(row)
 
             row = []
             row.append(auditCategories[2][0])
             row.append(auditCategories[2][1])
-            row.append('') #(colorize(self.auditData['CLUSTERS']['SIMILAR'], self.colors['highlight1']) if self.auditData['CLUSTERS']['SIMILAR'] else '')
-            row.append('') #(colorize(self.auditData['PAIRS']['SIMILAR'], self.colors['highlight1']) if self.auditData['PAIRS']['SIMILAR'] else '')
+            row.append('') #(colorize(self.auditData['CLUSTERS']['SIMILAR'], 'highlight1') if self.auditData['CLUSTERS']['SIMILAR'] else '')
+            row.append('') #(colorize(self.auditData['PAIRS']['SIMILAR'], 'highlight1') if self.auditData['PAIRS']['SIMILAR'] else '')
             row.append('')
-            row.append(colorize('F1 Score', self.colors['highlight1']))
+            row.append(colorize('F1 Score', 'highlight2'))
             row.append(colorize(self.auditData['ACCURACY']['F1-SCORE'], None))
             tblRows.append(row)
 
@@ -924,7 +859,7 @@ class G2CmdShell(cmd.Cmd):
             for category in self.auditData['AUDIT']:
                 for subCategory in self.auditData['AUDIT'][category]['SUB_CATEGORY']:
                     for sampleRecords in self.auditData['AUDIT'][category]['SUB_CATEGORY'][subCategory]['SAMPLE']:
-                        tableColumns, tableData = self.auditResult(sampleRecords, None) #--2nd parmater cuts out colorize for save to file
+                        tableColumns, tableData = self.showAuditSample(sampleRecords, None) #--2nd parmater cuts out colorize for save to file
                         recordHeaders = []
                         for columnDict in tableColumns:
                             columnName = columnDict['name'].lower()
@@ -986,7 +921,7 @@ class G2CmdShell(cmd.Cmd):
                 tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
                 tblRows = []
                 for subCategoryRow in subCategoryList:
-                    tblRows.append([str(subCategoryRow['INDEX']), colorize(category, categoryColor), subCategoryRow['NAME'], fmtStatistic(subCategoryRow['COUNT'])])
+                    tblRows.append([colorize(subCategoryRow['INDEX'], 'row_title'), colorize(category, categoryColor), subCategoryRow['NAME'], fmtStatistic(subCategoryRow['COUNT'])])
                 self.renderTable(tblTitle, tblColumns, tblRows)
 
                 return
@@ -1012,52 +947,34 @@ class G2CmdShell(cmd.Cmd):
             #--display sample records
             currentSample = 0
             while True:
-
-                self.auditResult(sampleRecords[currentSample], categoryColors)
-                exportRecords = list(set([x['newer_id'] for x in sampleRecords[currentSample]]))
-
-                while True:
-                    reply = input('Select (P)revious, (N)ext, (S)croll, (W)hy, (E)xport, (Q)uit ... ')
-                    if reply:
-                        removeFromHistory()
-                    else:
-                        break
-
-                    if reply.upper().startswith('R'): #--reload
-                        break
-                    elif reply.upper().startswith('P'): #--previous
-                        if currentSample == 0:
-                            printWithNewLines('no prior records!', 'B')
-                        else:
-                            currentSample = currentSample - 1
-                            break
-                    elif reply.upper().startswith('N'): #--next
-                        if currentSample == len(sampleRecords) - 1:
-                            printWithNewLines('no more records!', 'B')
-                        else:
-                            currentSample += 1
-                            break
-                    elif reply.upper().startswith('Q'): #--quit
-                        break
-
-                    #--special actions 
-                    elif reply.upper().startswith('S'): #--scrolling view
-                        self.do_scroll('')
-                    elif reply.upper().startswith('W2'): #--why view
-                        self.do_why(','.join(exportRecords) + ' old')
-                    elif reply.upper().startswith('W'): #--why view
-                        self.do_why(','.join(exportRecords))
-                    elif reply.upper().startswith('E'): #--export
-                        fileName = None
-                        if 'TO' in reply.upper():
-                            fileName = reply[reply.upper().find('TO') + 2:].strip()
-                        else:                            
-                            fileName = 'auditSample-%s.json' % sampleRecords[currentSample][0]['audit_id']
-                            #--fileName = os.path.join(os.path.expanduser("~"), fileName)
-                        self.do_export(','.join(exportRecords) + 'to ' + fileName)
-
-                if reply.upper().startswith('Q'):
+                currentRecords = list(set([x['newer_id'] for x in sampleRecords[currentSample]]))
+                self.currentReviewList = f"Item {currentSample + 1} of {len(sampleRecords)} for {argList[0]} category {argList[1]} - {subCategoryRow['NAME']}"
+                self.showAuditSample(sampleRecords[currentSample], categoryColors)
+                if len(currentRecords) == 1: 
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (H)ow, (W)hy, (E)xport, (Q)uit ... '))
+                    special_actions = 'HWE'
+                else:
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (Q)uit ... '))
+                    special_actions = 'WE'
+                if reply:
+                    removeFromHistory()
+                else:
+                    reply = 'N'
+                if reply.upper().startswith('Q'): #--quit
                     break
+                elif reply.upper()[0] in 'PNG': #--previous, next, goto
+                    currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                elif reply.upper()[0] in special_actions:
+                    if reply.upper().startswith('W2'):
+                        self.do_why(','.join(currentRecords) + ' old')
+                    elif reply.upper().startswith('W'):
+                        self.do_why(','.join(currentRecords))
+                    elif reply.upper().startswith('H'):
+                        self.do_how(','.join(currentRecords))
+                    elif reply.upper().startswith('E'):
+                        self.export_report_sample(reply, currentRecords, f"auditSample-{sampleRecords[currentSample][0]['audit_id']}.json")
+                    input('\npress enter to return to report')
+            self.currentReviewList = None
 
     # -----------------------------
     def complete_auditSummary(self, text, line, begidx, endidx):
@@ -1080,10 +997,9 @@ class G2CmdShell(cmd.Cmd):
         return [i for i in possibles if i.lower().startswith(arg.lower())]
 
     # -----------------------------
-    def auditResult (self, arg, categoryColors = None):
+    def showAuditSample(self, arg, categoryColors = None):
 
         auditRecords = arg
-        exportRecords = []
 
         tblTitle = 'Audit Result ID %s %s' % (auditRecords[0]['audit_id'], auditRecords[0]['audit_category'])
         tblColumns = []
@@ -1211,11 +1127,11 @@ class G2CmdShell(cmd.Cmd):
             else:
                 auditResultColor = None
             row = []
-            row.append(colorize(auditRecord['data_source'], self.colors['datasource'] if categoryColors else None) if 'data_source' in auditRecord else '')
+            row.append(colorize(auditRecord['data_source'], 'dsrc_color' if categoryColors else None) if 'data_source' in auditRecord else '')
             row.append(auditRecord['record_id'])
             row.append(auditRecord['prior_id'])
             row.append(auditRecord['prior_score'])
-            row.append(colorize(str(auditRecord['newer_id']), self.colors['entityid'] if categoryColors else None))
+            row.append(colorize(str(auditRecord['newer_id']), 'entity_color' if categoryColors else None))
             row.append(auditRecord['newer_score'])
             row.append(colorize(str(auditRecord['audit_result']), auditResultColor if categoryColors else None))
 
@@ -1245,31 +1161,16 @@ class G2CmdShell(cmd.Cmd):
         '\n\tReview items are suggestions of records to look at because they contain multiple names, addresses, dobs, etc.' \
         '\n\tThey may be overmatches or they may just be large entities with lots of values.\n'
 
-        if not self.snapshotData or 'ENTITY_SIZE_BREAKDOWN' not in self.snapshotData:
-            printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
+        if not self.snapshotData or (not self.snapshotData.get('ENTITY_SIZE_BREAKDOWN') \
+                                 and not self.snapshotData.get('TEMP_ESB_STATS')):
+            print('\nPlease load a json file created with G2Snapshot.py to access this report')
             return
 
-        #--turn esb into a list of size groups if not previously calculated
-        if type(self.snapshotData['ENTITY_SIZE_BREAKDOWN']) == dict:
-            response = input('\nPerform entity review, first? (yes/no) {note: this may take several minutes} ')            
-            reviewRequested = True if response.upper() in ('Y','YES') else False
-            self.snapshotData['ENTITY_SIZE_BREAKDOWN'] = self.summarize_entitySizeBreakdown(self.snapshotData['ENTITY_SIZE_BREAKDOWN'], reviewRequested)
-            if reviewRequested:
-                try: 
-                    with open(self.snapshotFile, 'w') as f:
-                        json.dump(self.snapshotData, f)
-                except IOError as err:
-                    print('Could not save review to %s ...' % self.snapshotFile)
-                    input('Press any key ...')
-
-        if 'ENTITY_SIZE_GROUP' not in self.snapshotData['ENTITY_SIZE_BREAKDOWN'][0]:
-            printWithNewLines('The statistics loaded contain an older entity size structure this viewer cannot display', 'S')
-            printWithNewLines('Please take a new snapshot with G2Snapshot.py to re-compute with the latest entity size breakdown structure', 'E')
-            return
+        if not self.snapshotData.get('ENTITY_SIZE_BREAKDOWN'):
+            self.compute_entitySizeBreakdown()
 
         #--display the summary if no arguments
         if not arg:
-            
             tblTitle = 'Entity Size Breakdown from %s' % self.snapshotFile
             tblColumns = []
             tblColumns.append({'name': 'Entity Size', 'width': 10, 'align': 'center'})
@@ -1280,10 +1181,10 @@ class G2CmdShell(cmd.Cmd):
             tblRows = []
             for entitySizeData in sorted(self.snapshotData['ENTITY_SIZE_BREAKDOWN'], key=lambda k: k['ENTITY_SIZE'], reverse = True):
                 row = []
-                row.append('%s' % (entitySizeData['ENTITY_SIZE_GROUP']))
-                row.append('%s' % (entitySizeData['ENTITY_COUNT'], ))
-                row.append('%s' % (entitySizeData['REVIEW_COUNT'], ))
-                row.append(' | '.join(sorted(entitySizeData['REVIEW_FEATURES'])))
+                row.append(colorize(entitySizeData['ENTITY_SIZE_GROUP'], 'row_title'))
+                row.append(entitySizeData['ENTITY_COUNT'])
+                row.append(entitySizeData['REVIEW_COUNT'])
+                row.append(' | '.join(colorize(x, 'caution') for x in sorted(entitySizeData['REVIEW_FEATURES'])))
                 tblRows.append(row)
             self.renderTable(tblTitle, tblColumns, tblRows)
 
@@ -1351,198 +1252,110 @@ class G2CmdShell(cmd.Cmd):
 
                 currentSample = 0
                 while True:
-                    exportRecords = [sampleRecords[currentSample]['ENTITY_ID']]
-
-                    self.currentReviewList = 'ENTITY SIZE %s' % sampleRecords[currentSample]['ENTITY_SIZE']
+                    self.currentReviewList = f"Item {currentSample + 1} of {len(sampleRecords)} for Entity Size {sampleRecords[currentSample]['ENTITY_SIZE']}"
                     if 'REVIEW_FEATURES' in sampleRecords[currentSample]:
                         reviewItems = []
                         for ftypeCode in sampleRecords[currentSample]['REVIEW_FEATURES']:
-                            reviewItems.append('%s (%s)' % (ftypeCode, sampleRecords[currentSample][ftypeCode]))
-                        self.currentReviewList += ' - REVIEW FOR: ' + ' | '.join(reviewItems)
+                            reviewItems.append(f"{ftypeCode} ({sampleRecords[currentSample][ftypeCode]})")
+                        self.currentReviewList += ', review for: ' + ', '.join(reviewItems)
 
-                    returnCode = self.do_get(exportRecords[0])
+                    currentRecords = [str(sampleRecords[currentSample]['ENTITY_ID'])]
+                    returnCode = self.do_get(currentRecords[0])
                     if returnCode != 0:
                         printWithNewLines('The statistics loaded are out of date for this entity','E')
 
-                    while True:
-                        reply = input('Select (P)revious, (N)ext, (S)croll, (D)etail, (W)hy, (E)xport, (Q)uit ...')
-                        if reply:
-                            removeFromHistory()
-                        else:
-                            break
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
+                    if reply:
+                        removeFromHistory()
+                    else:
+                        reply = 'N'
 
-                        if reply.upper().startswith('R'): #--reload
-                            break
-                        elif reply.upper().startswith('P'): #--previous
-                            if currentSample == 0:
-                                printWithNewLines('no prior records!', 'B')
-                            else:
-                                currentSample = currentSample - 1
-                                break
-                        elif reply.upper().startswith('N'): #--next
-                            if currentSample == len(sampleRecords) - 1:
-                                printWithNewLines('no more records!', 'B')
-                            else:
-                                currentSample += 1
-                                break
-                        elif reply.upper().startswith('Q'): #--quit
-                            break
-
-                        #--special actions 
-                        elif reply.upper().startswith('S'): #--scrolling view
-                            self.do_scroll('')
-                        elif reply.upper().startswith('D'): #--detail view
-                            self.do_get('detail ' + ','.join(exportRecords))
-                        elif reply.upper().startswith('W'): #--why view
-                            self.do_why(','.join(exportRecords))
-                        elif reply.upper().startswith('H'): #--how view
-                            self.do_how(','.join(exportRecords))
-                        elif reply.upper().startswith('E'): #--export
-                            fileName = None
-                            if 'TO' in reply.upper():
-                                fileName = reply[reply.upper().find('TO') + 2:].strip()
-                            else:                            
-                                fileName = '%s.json' % '-'.join(exportRecords)
-                                #fileName = os.path.join(os.path.expanduser("~"), fileName)
-                            self.do_export(','.join(exportRecords) + 'to ' + fileName)
-
-                    if reply.upper().startswith('Q'):
+                    if reply.upper().startswith('Q'): #--quit
                         break
+                    elif reply.upper()[0] in 'PNG': #--previous, next, goto
+                        currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                    elif reply.upper()[0] in 'DHWE':
+                        if reply.upper().startswith('D'):
+                            self.do_get('detail ' + ','.join(currentRecords))
+                        elif reply.upper().startswith('W'):
+                            self.do_why(','.join(currentRecords))
+                        elif reply.upper().startswith('H'):
+                            self.do_how(','.join(currentRecords))
+                        elif reply.upper().startswith('E'):
+                            self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
+                        input('\npress enter to return to report')
                 self.currentReviewList = None
 
     # -----------------------------
-    def summarize_entitySizeBreakdown (self, rawEntitySizeData, reviewRequested):
+    def compute_entitySizeBreakdown(self):
+        esb_data = {}
+        for str_entitySize in sorted(self.snapshotData['TEMP_ESB_STATS'].keys()):
+            entitySize = int(str_entitySize)
+            if entitySize <= 3: #--super small
+                maxExclusiveCnt = 1
+                maxNameCnt = 2
+                maxAddrCnt = 2
+            elif entitySize <= 10: #--small
+                maxExclusiveCnt = 1
+                maxNameCnt = 3
+                maxAddrCnt = 3
+            elif entitySize <= 50: #--medium
+                maxExclusiveCnt = 1
+                maxNameCnt = 10
+                maxAddrCnt = 10
+            else: #--large
+                maxExclusiveCnt = 1 #--large
+                maxNameCnt = 25
+                maxAddrCnt = 25
 
-        if reviewRequested:
-            reviewCount = sum([len(rawEntitySizeData[size]['SAMPLE']) for size in rawEntitySizeData.keys()])
-            print('\nreviewing %s entities ... ' % reviewCount)
-
-        progressCnt = 0
-        newEntitySizeData = {}
-        for entitySize in sorted([int(x) for x in rawEntitySizeData.keys()]):
-            strEntitySize = str(entitySize)
+            #--setup for the entity size
             if entitySize < 10:
                 entitySizeLevel = entitySize
             elif entitySize < 100:
                 entitySizeLevel = int(entitySize/10) * 10
             else:
                 entitySizeLevel = int(entitySize/100) * 100
+            if entitySizeLevel not in esb_data:
+                esb_data[entitySizeLevel] = {'ENTITY_COUNT': 0,
+                                             'SAMPLE_ENTITIES': [],
+                                             'REVIEW_COUNT': 0,
+                                             'REVIEW_FEATURES': []}
+            esb_data[entitySizeLevel]['ENTITY_COUNT'] += self.snapshotData['TEMP_ESB_STATS'][str_entitySize]['COUNT']
 
-            if entitySizeLevel not in newEntitySizeData:
-                newEntitySizeData[entitySizeLevel] = {}
-                newEntitySizeData[entitySizeLevel]['ENTITY_COUNT'] = 0
-                newEntitySizeData[entitySizeLevel]['SAMPLE_ENTITIES'] = []
-                newEntitySizeData[entitySizeLevel]['REVIEW_COUNT'] = 0
-                newEntitySizeData[entitySizeLevel]['REVIEW_FEATURES'] = []
-            newEntitySizeData[entitySizeLevel]['ENTITY_COUNT'] += rawEntitySizeData[strEntitySize]['COUNT']
+            #--review each entity
+            for sample_record in self.snapshotData['TEMP_ESB_STATS'][str_entitySize]['SAMPLE']:
+                review_features = []
+                for raw_attr in sample_record.keys():
+                    if raw_attr in ('ENTITY_ID', 'ENTITY_SIZE'):
+                        continue
+                    ftype_code = raw_attr
+                    ftype_excl = self.ftypeCodeLookup[ftype_code]['FTYPE_EXCL']
+                    distinctFeatureCount = sample_record[ftype_code]
+                    if ftype_code == 'NAME' and distinctFeatureCount > maxNameCnt:
+                        review_features.append(ftype_code)
+                    elif ftype_code == 'ADDRESS' and distinctFeatureCount > maxAddrCnt:
+                        review_features.append(ftype_code)
+                    elif ftype_excl == 'Yes' and distinctFeatureCount > maxExclusiveCnt:
+                        review_features.append(ftype_code)
+                if review_features:
+                    sample_record['REVIEW_FEATURES'] = review_features
+                    esb_data[entitySizeLevel]['REVIEW_FEATURES'] = list(set(esb_data[entitySizeLevel]['REVIEW_FEATURES'] + review_features))
+                    esb_data[entitySizeLevel]['REVIEW_COUNT'] += 1
+                esb_data[entitySizeLevel]['SAMPLE_ENTITIES'].append(sample_record)
 
-            for entityID in rawEntitySizeData[strEntitySize]['SAMPLE']:
-                sampleRecord = {'ENTITY_SIZE': entitySize, 'ENTITY_ID': str(entityID)}
-                if reviewRequested:
-                    reviewInfo = self.review_ESBSample(sampleRecord)
-                    sampleRecord.update(reviewInfo)
-                    if 'REVIEW_FEATURES' in reviewInfo:
-                        newEntitySizeData[entitySizeLevel]['REVIEW_COUNT'] += 1
-                        for featureCode in reviewInfo['REVIEW_FEATURES']:
-                            if featureCode not in newEntitySizeData[entitySizeLevel]['REVIEW_FEATURES']:
-                                newEntitySizeData[entitySizeLevel]['REVIEW_FEATURES'].append(featureCode)
-                    progressCnt += 1
-                    if progressCnt % 1000 == 0:
-                        print('%s entities reviewed' % progressCnt)
+        self.snapshotData['ENTITY_SIZE_BREAKDOWN'] = []
+        for entitySizeLevel in sorted(esb_data.keys()):
+            entitySizeRecord = esb_data[entitySizeLevel]
+            entitySizeRecord['ENTITY_SIZE'] = entitySizeLevel
+            entitySizeRecord['ENTITY_SIZE_GROUP'] = str(entitySizeLevel) + ('+' if int(entitySizeLevel) >= 10 else '')
+            self.snapshotData['ENTITY_SIZE_BREAKDOWN'].append(entitySizeRecord)
 
-                #--review it here
-                newEntitySizeData[entitySizeLevel]['SAMPLE_ENTITIES'].append(sampleRecord)
-
-        newEntitySizeList = []
-        for entitySize in sorted(newEntitySizeData.keys()):
-            entitySizeRecord = newEntitySizeData[entitySize]
-            entitySizeRecord['ENTITY_SIZE'] = int(entitySize)
-            entitySizeRecord['ENTITY_SIZE_GROUP'] = str(entitySize) + ('+' if int(entitySize) >= 10 else '')
-            newEntitySizeList.append(entitySizeRecord)
-
-        if reviewRequested:
-            print('%s entities reviewed, complete' % progressCnt)
-
-
-        return newEntitySizeList
-
-    # -----------------------------
-    def review_ESBSample (self, sampleRecord):
-        entitySize = sampleRecord['ENTITY_SIZE']
-        entityID = sampleRecord['ENTITY_ID']
-        if entitySize == 1:
-            return sampleRecord
-
-        #--set maximums based on entity size
-        if entitySize <= 3: #--super small
-            maxExclusiveCnt = 1
-            maxNameCnt = 2
-            maxAddrCnt = 2
-        elif entitySize <= 10: #--small
-            maxExclusiveCnt = 1
-            maxNameCnt = 3
-            maxAddrCnt = 3
-        elif entitySize <= 50: #--medium
-            maxExclusiveCnt = 1
-            maxNameCnt = 10
-            maxAddrCnt = 10
-        else: #--large
-            maxExclusiveCnt = 1 #--large
-            maxNameCnt = 25
-            maxAddrCnt = 25
-
-        #--get the entity
         try: 
-            response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), self.computeApiFlags(['G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES']), response)
-            response = response.decode() if response else ''
-        except G2Exception as err:
-            print(str(err))
-            return sampleRecord
-        try: jsonData = json.loads(response)
-        except:
-            print('warning: entity %s response=[%s]' % (entityID, response))
-            return sampleRecord
-
-        #print('entityID %s, size %s' % (entityID, entitySize))
-
-        featureInfo = {}
-        for ftypeCode in jsonData['RESOLVED_ENTITY']['FEATURES']:
-            distinctFeatureCount = 0
-            for distinctFeature in jsonData['RESOLVED_ENTITY']['FEATURES'][ftypeCode]:
-                if ftypeCode == 'GENDER' and distinctFeature['FEAT_DESC'] not in ('M', 'F'): #--don't count invalid genders
-                    continue
-                distinctFeatureCount += 1
-            if ftypeCode not in featureInfo:
-                featureInfo[ftypeCode] = 0
-            featureInfo[ftypeCode] += distinctFeatureCount
-
-        reviewFeatures = []
-        for ftypeCode in featureInfo:
-            distinctFeatureCount = featureInfo[ftypeCode]
-
-            #--watch lists have more multiple features per record like 5 dobs and 10 names!
-            if distinctFeatureCount > entitySize:
-                continue
-
-            frequency = self.ftypeCodeLookup[ftypeCode]['FTYPE_FREQ']
-            exclusive = str(self.ftypeCodeLookup[ftypeCode]['FTYPE_EXCL']).upper() in ('1', 'Y', 'YES')
-
-            needsReview = False
-            if exclusive and distinctFeatureCount > maxExclusiveCnt:
-                needsReview = True
-            elif ftypeCode == 'NAME' and distinctFeatureCount > maxNameCnt:
-                needsReview = True
-            elif ftypeCode == 'ADDRESS' and distinctFeatureCount > maxAddrCnt:
-                needsReview = True
-
-            if needsReview: 
-                reviewFeatures.append(ftypeCode)
-
-        if reviewFeatures:
-            featureInfo['REVIEW_FEATURES'] = reviewFeatures
- 
-        return featureInfo
+            with open(self.snapshotFile, 'w') as f:
+                json.dump(self.snapshotData, f)
+        except IOError as err:
+            print('Could not save review to %s ...' % self.snapshotFile)
+            input('Press enter to continue')
 
     # -----------------------------
     def do_dataSourceSummary (self, arg):
@@ -1573,7 +1386,7 @@ class G2CmdShell(cmd.Cmd):
             tblRows = []
             for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
                 row = []
-                row.append(colorize(dataSource, self.colors['datasource']))
+                row.append(colorize_dsrc(dataSource))
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['RECORD_COUNT']) if 'RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['ENTITY_COUNT']) if 'ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
                 row.append(self.snapshotData['DATA_SOURCES'][dataSource]['COMPRESSION'] if 'COMPRESSION' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
@@ -1595,9 +1408,7 @@ class G2CmdShell(cmd.Cmd):
                 self.renderTable(tblTitle, tblColumns, tblRows)
             else:
                 return tblColumns, tblRows
-
         else:
-
             argTokens = arg.split()
             if len(argTokens) != 2:
                 print('\nMissing argument(s) for %s, command syntax: %s \n' % ('do_dataSourceSummary', '\n\n' + self.do_dataSourceSummary.__doc__[1:]))
@@ -1627,74 +1438,56 @@ class G2CmdShell(cmd.Cmd):
                 printWithNewLines('no entities to display!', 'B')
             else:
 
-                self.currentReviewList = 'DATA SOURCE SUMMARY FOR: %s (%s)' % (dataSource, matchLevelCode) 
                 currentSample = 0
                 while True:
+                    self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} in {dataSource}"
+
                     if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                        exportRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(exportRecords[0], dataSourceFilter=[dataSource])
+                        currentRecords = [str(sampleRecords[currentSample])]
+                        returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource])
                     else:
-                        exportRecords = sampleRecords[currentSample].split()[:2]
+                        currentRecords = sampleRecords[currentSample].split()[:2]
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
-                            ambiguousList =self.getAmbiguousEntitySet(exportRecords[0]) #--is this the ambiguous entity
+                            ambiguousList =self.getAmbiguousEntitySet(currentRecords[0]) #--is this the ambiguous entity
                             if ambiguousList:
-                                exportRecords = ambiguousList
+                                currentRecords = ambiguousList
                             else:
-                                ambiguousList =self.getAmbiguousEntitySet(exportRecords[1]) #--or is this the ambiguous entity
+                                ambiguousList =self.getAmbiguousEntitySet(currentRecords[1]) #--or is this the ambiguous entity
                                 if ambiguousList:
-                                    exportRecords = ambiguousList
+                                    currentRecords = ambiguousList
                                 else:
                                     pass #--if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(exportRecords), dataSourceFilter=[dataSource])
+                        returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
+
                     if returnCode != 0:
                         printWithNewLines('The statistics loaded are out of date for this record!','E')
-                    while True:
-                        if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                            reply = input('Select (P)revious, (N)ext, (S)croll, (D)etail, (W)hy, (E)xport, (Q)uit ...')
-                        else:
-                            reply = input('Select (P)revious, (N)ext, (S)croll, (W)hy, (E)xport, (Q)uit ...')
-          
-                        if reply:
-                            removeFromHistory()
-                        else:
-                            break
 
-                        if reply.upper().startswith('R'): #--reload
-                            break
-                        elif reply.upper().startswith('P'): #--previous
-                            if currentSample == 0:
-                                printWithNewLines('no prior records!', 'B')
-                            else:
-                                currentSample = currentSample - 1
-                                break
-                        elif reply.upper().startswith('N'): #--next
-                            if currentSample == len(sampleRecords) - 1:
-                                printWithNewLines('no more records!', 'B')
-                            else:
-                                currentSample += 1
-                                break
-                        elif reply.upper().startswith('Q'): #--quit
-                            break
+                    if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
+                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
+                        special_actions = 'DHWE'
+                    else:
+                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (Q)uit ...'))
+                        special_actions = 'WE'
+                    if reply:
+                        removeFromHistory()
+                    else:
+                        reply = 'N'
 
-                        #--special actions 
-                        elif reply.upper().startswith('S'): #--scrolling view
-                            self.do_scroll('')
-                        elif reply.upper().startswith('D') and matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'): #--detail view
-                            self.do_get('detail ' + ','.join(exportRecords))
-                        elif reply.upper().startswith('W'): #--why view
-                            self.do_why(','.join(exportRecords))
-                        elif reply.upper().startswith('E'): #--export
-                            fileName = None
-                            if 'TO' in reply.upper():
-                                fileName = reply[reply.upper().find('TO') + 2:].strip()
-                            else:                            
-                                fileName = '%s.json' % '-'.join(exportRecords)
-                                #fileName = os.path.join(os.path.expanduser("~"), fileName)
-                            self.do_export(','.join(exportRecords) + 'to ' + fileName)
-
-                    if reply.upper().startswith('Q'):
+                    if reply.upper().startswith('Q'): #--quit
                         break
-            self.currentReviewList = None
+                    elif reply.upper()[0] in 'PNG': #--previous, next, goto
+                        currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                    elif reply.upper()[0] in special_actions:
+                        if reply.upper().startswith('D'):
+                            self.do_get('detail ' + ','.join(currentRecords))
+                        elif reply.upper().startswith('W'):
+                            self.do_why(','.join(currentRecords))
+                        elif reply.upper().startswith('H'):
+                            self.do_how(','.join(currentRecords))
+                        elif reply.upper().startswith('E'):
+                            self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
+                        input('\npress enter to return to report')
+                self.currentReviewList = None
 
     # -----------------------------
     def complete_dataSourceSummary(self, text, line, begidx, endidx):
@@ -1747,14 +1540,9 @@ class G2CmdShell(cmd.Cmd):
                 if arg and dataSource1 != arg.upper():
                     continue
                 for dataSource2 in sorted(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES']):
-
-                    #for key in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]:
-                    #    if type(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2][key]) != list:
-                    #        print ('%s = %s' % (key, self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2][key]))
-
                     row = []
-                    row.append(colorize(dataSource1, self.colors['datasource']))
-                    row.append(colorize(dataSource2, self.colors['datasource']))
+                    row.append(colorize_dsrc(dataSource1))
+                    row.append(colorize_dsrc(dataSource2))
 
                     if self.current_settings['statistic_level'] == 'record':
                         row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_RECORD_COUNT']) if 'MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
@@ -1770,9 +1558,7 @@ class G2CmdShell(cmd.Cmd):
                     tblRows.append(row)
 
             self.renderTable(tblTitle, tblColumns, tblRows)
-
         else:
-
             argTokens = arg.split()
             if len(argTokens) != 3:
                 print('\nMissing argument(s) for %s, command syntax: %s \n' % ('do_crossSourceSummary', '\n\n' + self.do_crossSourceSummary.__doc__[1:]))
@@ -1809,79 +1595,58 @@ class G2CmdShell(cmd.Cmd):
                 return
 
             if len(sampleRecords) == 0:
-                printWithNewLines('no entities to display!', 'B')
+                printWithNewLines('no samples to display!', 'B')
             else:
 
-                self.currentReviewList = 'CROSS SOURCE SUMMARY for: %s-%s  (%s)' % (dataSource1, dataSource2, matchLevelCode) 
                 currentSample = 0
                 while True:
+                    self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} between {dataSource1} and {dataSource2}"
 
                     if matchLevelCode in ('MATCH_SAMPLE'):
-                        exportRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(exportRecords[0], dataSourceFilter=[dataSource1, dataSource2])
+                        currentRecords = [str(sampleRecords[currentSample])]
+                        returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource1, dataSource2])
                     else:
-                        exportRecords = sampleRecords[currentSample].split()[:2]
+                        currentRecords = sampleRecords[currentSample].split()[:2]
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
-                            ambiguousList =self.getAmbiguousEntitySet(exportRecords[0]) #--is this the ambiguous entity
+                            ambiguousList =self.getAmbiguousEntitySet(currentRecords[0]) #--is this the ambiguous entity
                             if ambiguousList:
-                                exportRecords = ambiguousList
+                                currentRecords = ambiguousList
                             else:
-                                ambiguousList =self.getAmbiguousEntitySet(exportRecords[1]) #--or is this the ambiguous entity
+                                ambiguousList =self.getAmbiguousEntitySet(currentRecords[1]) #--or is this the ambiguous entity
                                 if ambiguousList:
-                                    exportRecords = ambiguousList
+                                    currentRecords = ambiguousList
                                 else:
                                     pass #--if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(exportRecords), dataSourceFilter=[dataSource1, dataSource2])
+                        returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource1, dataSource2])
 
                     if returnCode != 0:
                         printWithNewLines('The statistics loaded are out of date for this entity','E')
 
-                    while True:
-                        if matchLevelCode in ('MATCH_SAMPLE'):
-                            reply = input('Select (P)revious, (N)ext, (S)croll, (D)etail, (W)hy, (E)xport, (Q)uit ...')
-                        else:
-                            reply = input('Select (P)revious, (N)ext, (S)croll, (W)hy, (E)xport, (Q)uit ...')
-
-                        if reply:
-                            removeFromHistory()
-                        else:
-                            break
-
-                        if reply.upper().startswith('R'): #--reload
-                            break
-                        elif reply.upper().startswith('P'): #--previous
-                            if currentSample == 0:
-                                printWithNewLines('no prior records!', 'B')
-                            else:
-                                currentSample = currentSample - 1
-                                break
-                        elif reply.upper().startswith('N'): #--next
-                            if currentSample == len(sampleRecords) - 1:
-                                printWithNewLines('no more records!', 'B')
-                            else:
-                                currentSample += 1
-                                break
-                        elif reply.upper().startswith('Q'): #--quit
-                            break
-
-                        #--special actions 
-                        elif reply.upper().startswith('S'): #--scrolling view
-                            self.do_scroll('')
-                        elif reply.upper().startswith('D') and matchLevelCode in ('MATCH_SAMPLE'): #--detail view
-                            self.do_get('detail ' + ','.join(exportRecords))
-                        elif reply.upper().startswith('W'): #--why view
-                            self.do_why(','.join(exportRecords))
-                        elif reply.upper().startswith('E'): #--export
-                            fileName = None
-                            if 'TO' in reply.upper():
-                                fileName = reply[reply.upper().find('TO') + 2:].strip()
-                            else:                            
-                                fileName = '%s.json' % '-'.join(exportRecords)
-                                #fileName = os.path.join(os.path.expanduser("~"), fileName)
-                            self.do_export(','.join(exportRecords) + 'to ' + fileName)
-
-                    if reply.upper().startswith('Q'):
+                    if matchLevelCode in ('MATCH_SAMPLE'):
+                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
+                        special_actions = 'DHWE'
+                    else:
+                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (Q)uit ...'))
+                        special_actions = 'WE'
+                    if reply:
+                        removeFromHistory()
+                    else:
                         break
+
+                    if reply.upper().startswith('Q'): #--quit
+                        break
+                    elif reply.upper()[0] in 'PNG': #--previous, next, goto
+                        currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                    elif reply.upper()[0] in special_actions:
+                        if reply.upper().startswith('D'):
+                            self.do_get('detail ' + ','.join(currentRecords))
+                        elif reply.upper().startswith('W'):
+                            self.do_why(','.join(currentRecords))
+                        elif reply.upper().startswith('H'):
+                            self.do_how(','.join(currentRecords))
+                        elif reply.upper().startswith('E'):
+                            self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
+                        input('\npress enter to return to report')
                 self.currentReviewList = None
 
     # -----------------------------
@@ -1962,8 +1727,7 @@ class G2CmdShell(cmd.Cmd):
                 showDebug('searchMessage', searchJson)
                 apiCall = f'searchByAttributesV2(searchMessage, {searchFlagBits}, response)'
                 showApiDebug('search', apiCall, searchFlagList, jsonResponse)
-
-                
+               
             #--constants for descriptions and sort orders
             dataSourceOrder = [] #--place your data sources here!
 
@@ -1996,9 +1760,9 @@ class G2CmdShell(cmd.Cmd):
                 dataSourceList = []
                 for dataSource in dataSources:
                     if len(dataSources[dataSource]) == 1:
-                        dataSourceList.append(colorize(dataSource, self.colors['datasource']) + ': ' + dataSources[dataSource][0])
+                        dataSourceList.append(colorize_dsrc(dataSource + ': ' + dataSources[dataSource][0]))
                     else:
-                        dataSourceList.append(colorize(dataSource, self.colors['datasource'])  + ': ' + str(len(dataSources[dataSource])) + ' records')
+                        dataSourceList.append(colorize_dsrc(dataSource  + ': ' + str(len(dataSources[dataSource])) + ' records'))
 
                 #relatedEntityCount = len(resolvedEntityBase['ENTITY']['RELATED_ENTITIES'] if 'RELATED_ENTITIES' in resolvedEntityBase['ENTITY'] else 0)
                 disclosedCount = 0
@@ -2010,9 +1774,9 @@ class G2CmdShell(cmd.Cmd):
                         derivedCount += 1
                 relationshipLines = []
                 if derivedCount > 0:
-                    relationshipLines.append(f'Derived: {derivedCount} ')
+                    relationshipLines.append(f"{derivedCount} {colorize('(derived)', 'dim')}")
                 if disclosedCount > 0:
-                    relationshipLines.append(f'Disclosed: {disclosedCount}')
+                    relationshipLines.append(f"{disclosedCount} {colorize('(disclosed)', 'dim')}")
 
                 #--determine the matching criteria
                 matchLevel = self.searchMatchLevels[resolvedEntityMatchInfo['MATCH_LEVEL']]
@@ -2071,7 +1835,7 @@ class G2CmdShell(cmd.Cmd):
                 matchData = {}
                 matchData['matchKey'] = matchKey
                 matchData['ruleCode'] = self.getRuleDesc(ruleCode)
-                row.append(formatMatchData(matchData, self.colors))
+                row.append(colorize_match_data(matchData))
                 row.append(matchScore)
                 row.append('\n'.join(relationshipLines))
                 matchList.append(row)
@@ -2105,8 +1869,8 @@ class G2CmdShell(cmd.Cmd):
                 self.lastSearchResult = []
                 for i in range(len(matchList)):
                     self.lastSearchResult.append(matchList[i][1])
-                    matchList[i][0] = str(i+1)
-                    matchList[i][1] = colorize(matchList[i][1], self.colors['entityid'])
+                    matchList[i][0] = colorize(i+1, 'row_title')
+                    matchList[i][1] = colorize_entity(matchList[i][1])
                     matchList[i][2] = matchList[i][2]
                 self.renderTable(tblTitle, tblColumns, matchList)
 
@@ -2122,9 +1886,11 @@ class G2CmdShell(cmd.Cmd):
         '\n\tget search <search index>' \
         '\n\tget detail <entity_id>' \
         '\n\tget detail <dataSource> <recordID>' \
+        '\n\tget features <entity_id>' \
         '\n\nNotes: ' \
-        '\n\tget search is a shortcut to the entity ID at the search index provided. Must be valid for the last search performed' \
-        '\n\tget detail displays every record for the entity while a get alone displays a summary of the entity by dataSource.\n'
+        '\n\tget search is a shortcut to the entity ID at the search index provided. Must be valid for the last search performed.' \
+        '\n\tget detail displays every record for the entity while a get alone displays a summary of the entity by dataSource.' \
+        '\n\tget features displays the mapped and internal derived elements of each feature in the entity\n'
 
         if not argCheck('do_get', arg, self.do_get.__doc__):
             return
@@ -2207,7 +1973,6 @@ class G2CmdShell(cmd.Cmd):
         relatedEntityCount = len(resolvedJson['RELATED_ENTITIES']) if 'RELATED_ENTITIES' in resolvedJson else 0
         entityID = str(resolvedJson['RESOLVED_ENTITY']['ENTITY_ID'])
         entityName = resolvedJson['RESOLVED_ENTITY']['ENTITY_NAME']
-        #coloredEntityID = colorize(entityID, self.colors['entityid'])
 
         if showFeatures:
             tblColumns = []
@@ -2215,9 +1980,9 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': 'Description', 'width': 100, 'align': 'left'})
             tblColumns.append({'name': 'Elements', 'width': 100, 'align': 'left'})
             reportType = 'features'
-            tblTitle = colorize(f'Entity {reportType} for: {entityID} - {entityName}', self.colors['entityid'])
+            tblTitle = f"Entity {reportType} for entity {colorize_entity(entityID)}: {entityName}"
             tblRows = self.getFeatures(entityID)
-            self.renderTable(tblTitle, tblColumns, tblRows, titleColor=self.colors['entityTitle'])
+            self.renderTable(tblTitle, tblColumns, tblRows)
             return 0
         else:
             tblColumns = []
@@ -2225,7 +1990,7 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': 'Entity Data', 'width': 100, 'align': 'left'})
             tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
             reportType = 'detail' if showDetail else 'summary'
-            tblTitle = colorize(f'Entity {reportType} for: {entityID} - {entityName}', self.colors['entityid'])
+            tblTitle = f"Entity {reportType} for entity {colorize_entity(entityID)}: {entityName}"
 
             #--summarize by data source
             additionalDataSources = False
@@ -2260,16 +2025,13 @@ class G2CmdShell(cmd.Cmd):
                     row = [recordData, entityData, otherData]
                     recordList.append(row)
 
-            #if additionalDataSources:
-            #    tblTitle += ' ' + colorize('** additionalDataSources **', 'blink'q)
-
             #--display if no relationships
             if relatedEntityCount == 0 or self.current_settings['show_relations_on_get'] == 'off':
-                self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'])
+                self.renderTable(tblTitle, tblColumns, recordList)
                 return 0
 
             #--otherwise begin the report and add the relationships
-            self.renderTable(tblTitle, tblColumns, recordList, titleColor=self.colors['entityTitle'], displayFlag='begin')
+            self.renderTable(tblTitle, tblColumns, recordList, displayFlag='begin')
 
             relationships = []
             for relatedEntity in resolvedJson['RELATED_ENTITIES']:
@@ -2281,11 +2043,10 @@ class G2CmdShell(cmd.Cmd):
                 relationship['ENTITY_NAME'] = relatedEntity['ENTITY_NAME']
                 relationship['DATA_SOURCES'] = []
                 for dataSource in relatedEntity['RECORD_SUMMARY']:
-                    relationship['DATA_SOURCES'].append('%s (%s)' %(colorize(dataSource['DATA_SOURCE'], self.colors['datasource']), dataSource['RECORD_COUNT']))
+                    relationship['DATA_SOURCES'].append(f"{colorize_dsrc(dataSource['DATA_SOURCE'])} ({dataSource['RECORD_COUNT']})")
                 relationships.append(relationship)
 
-            #tblTitle = f'{relatedEntityCount} related entities'
-            tblTitle = colorize(f'Entities related to: {entityID} - {entityName}', self.colors['entityid'])
+            tblTitle = f'{relatedEntityCount} related entities'
             tblColumns = []
             tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'left'})
             tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
@@ -2295,17 +2056,17 @@ class G2CmdShell(cmd.Cmd):
             relatedRecordList = []
             for relationship in sorted(relationships, key = lambda k: k['MATCH_LEVEL']):
                 row = []
-                row.append(colorize(str(relationship['ENTITY_ID']), self.colors['entityid']))
+                row.append(colorize_entity(str(relationship['ENTITY_ID'])))
                 row.append(relationship['ENTITY_NAME'])
                 row.append('\n'.join(sorted(relationship['DATA_SOURCES'])))
                 row.append(self.relatedMatchLevels[relationship['MATCH_LEVEL']])
                 matchData = {}
                 matchData['matchKey'] = relationship['MATCH_KEY']
                 matchData['ruleCode'] = self.getRuleDesc(relationship['ERRULE_CODE'])
-                row.append(formatMatchData(matchData, self.colors))
+                row.append(colorize_match_data(matchData))
                 relatedRecordList.append(row)
                     
-            self.renderTable(tblTitle, tblColumns, relatedRecordList, titleColor=self.colors['entityTitle'], titleJustify='l', displayFlag='end')
+            self.renderTable(tblTitle, tblColumns, relatedRecordList, titleJustify='l', displayFlag='end')
 
         return 0
 
@@ -2323,7 +2084,7 @@ class G2CmdShell(cmd.Cmd):
         for record in [recordList] if type(recordList) != list else recordList:
  
             #--should only ever be one data source in the list
-            dataSource = colorize(record['DATA_SOURCE'], self.colors['datasource']) 
+            dataSource = colorize_dsrc(record['DATA_SOURCE']) 
 
             recordIdData = record['RECORD_ID']
             if reportType == 'detail':
@@ -2331,27 +2092,27 @@ class G2CmdShell(cmd.Cmd):
                     matchData = {}
                     matchData['matchKey'] = record['MATCH_KEY']
                     matchData['ruleCode'] = self.getRuleDesc(record['ERRULE_CODE'])
-                    recordIdData += '\n' + formatMatchData(matchData, self.colors)
+                    recordIdData += '\n' + colorize_match_data(matchData)
                 if record['ERRULE_CODE']:
                     recordIdData += '\n  ' + colorize(self.getRuleDesc(record['ERRULE_CODE']), 'dim')
             recordIdList.append(recordIdData)
 
             for item in record['NAME_DATA']:
                 if item.upper().startswith('PRIMARY'):
-                    primaryNameList.append(colorizeAttribute(item, self.colors['highlight1']))
+                    primaryNameList.append(colorize_attr(item))
                 else:
-                    otherNameList.append(colorizeAttribute('NAME: ' + item if ':' not in item else item, self.colors['highlight1']))
+                    otherNameList.append(colorize_attr('NAME: ' + item if ':' not in item else item))
             for item in record['ADDRESS_DATA']:
-                addressList.append(colorizeAttribute('ADDRESS: ' + item if ':' not in item else item, self.colors['highlight1']))
+                addressList.append(colorize_attr('ADDRESS: ' + item if ':' not in item else item))
             for item in record['PHONE_DATA']:
-                phoneList.append(colorizeAttribute('PHONE: ' + item if ':' not in item else item, self.colors['highlight1']))
+                phoneList.append(colorize_attr('PHONE: ' + item if ':' not in item else item))
             for item in record['ATTRIBUTE_DATA']:
-                attributeList.append(colorizeAttribute(item, self.colors['highlight1']))
+                attributeList.append(colorize_attr(item))
             for item in record['IDENTIFIER_DATA']:
-                identifierList.append(colorizeAttribute(item, self.colors['highlight1']))
+                identifierList.append(colorize_attr(item))
             for item in sorted(record['OTHER_DATA']):
                 if not self.isInternalAttribute(item) or reportType == 'detail':
-                    otherList.append(colorizeAttribute(item, self.colors['highlight1']))
+                    otherList.append(colorize_attr(item))
 
         recordDataList = [dataSource] + sorted(recordIdList)
         entityDataList = list(set(primaryNameList)) + list(set(otherNameList)) + sorted(set(attributeList)) + sorted(set(identifierList)) + list(set(addressList)) + list(set(phoneList))
@@ -2432,7 +2193,7 @@ class G2CmdShell(cmd.Cmd):
                 print(err)
             jsonData = json.loads(response)
 
-            ftypeDisplay = ftypeCode + (' (' + usageType + ')' if usageType else '')
+            ftypeDisplay = colorize_attr(ftypeCode + (' (' + usageType + ')' if usageType else ''))
             ftypeDisplay += '\n  ' + colorize(f'id: {libFeatId}', 'dim')
 
             #--standardize the order of the attributes
@@ -2443,7 +2204,7 @@ class G2CmdShell(cmd.Cmd):
 
             felemDisplayList = []
             for elementData in sorted(sorted(jsonData['ELEMENTS'], key=lambda k: (k['FELEM_CODE'])), key=lambda k: (k['ATTR_ID'])):
-                felemDisplayList.append(colorize(elementData['FELEM_CODE'], self.colors['highlight1']) + ': ' +  elementData['FELEM_VALUE'])
+                felemDisplayList.append(colorize(elementData['FELEM_CODE'], 'highlight2') + ': ' +  elementData['FELEM_VALUE'])
 
             tblRows.append([ftypeDisplay, featureDesc, '\n'.join(felemDisplayList)])
         return tblRows
@@ -2673,18 +2434,18 @@ class G2CmdShell(cmd.Cmd):
             dataSourcesList = []
             for dataSource in sorted(entityData['dataSources']):
                 for recordID in sorted(entityData['dataSources'][dataSource])[:5]:
-                    dataSourcesList.append(colorizeAttribute(dataSource + ': ' + recordID, self.colors['datasource']))
+                    dataSourcesList.append(colorize_dsrc(dataSource + ': ' + recordID))
                 if len(entityData['dataSources'][dataSource]) > 5:
                     dataSourcesList.append(dataSource + ': +%s more ' % str(len(entityData['dataSources'][dataSource]) - 5))
             dataSourcesRow.append('\n'.join(dataSourcesList))
 
-            nameDataRow.append('\n'.join([colorizeAttribute(x, self.colors['highlight1']) for x in sorted(entityData['nameData'])]))
-            attributeDataRow.append('\n'.join([colorizeAttribute(x, self.colors['highlight1']) for x in sorted(entityData['attributeData'])]))
-            identifierDataRow.append('\n'.join([colorizeAttribute(x, self.colors['highlight1']) for x in sorted(entityData['identifierData'])]))
-            addressDataRow.append('\n'.join([colorizeAttribute(x, self.colors['highlight1']) for x in sorted(entityData['addressData'])]))
-            phoneDataRow.append('\n'.join([colorizeAttribute(x, self.colors['highlight1']) for x in sorted(entityData['phoneData'])]))
-            relationshipDataRow.append('\n'.join([colorizeAttribute(x, self.colors['highlight1']) for x in sorted(entityData['relationshipData'])]))
-            otherDataRow.append('\n'.join([colorizeAttribute(x, self.colors['highlight1']) for x in sorted(entityData['otherData'])]))
+            nameDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['nameData'])]))
+            attributeDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['attributeData'])]))
+            identifierDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['identifierData'])]))
+            addressDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['addressData'])]))
+            phoneDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['phoneData'])]))
+            relationshipDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['relationshipData'])]))
+            otherDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['otherData'])]))
 
             crossRelsList = []
             for relation in sorted(entityData['crossRelations'], key=lambda x: x['ENTITY_ID']):
@@ -2693,7 +2454,7 @@ class G2CmdShell(cmd.Cmd):
                 matchData['ruleCode'] = self.getRuleDesc(relation['ERRULE_CODE'])
                 if len(compareList) > 2:
                     matchData['entityId'] = relation['ENTITY_ID']
-                crossRelsList.append(formatMatchData(matchData, self.colors))
+                crossRelsList.append(colorize_match_data(matchData))
             crossRelsRow.append('\n'.join(crossRelsList))
 
             commonRelsList = []
@@ -2702,7 +2463,7 @@ class G2CmdShell(cmd.Cmd):
                 matchData['matchKey'] = relation['MATCH_KEY']
                 matchData['ruleCode'] = self.getRuleDesc(relation['ERRULE_CODE'])
                 matchData['entityId'] = relation['ENTITY_ID']
-                commonRelsList.append(formatMatchData(matchData))
+                commonRelsList.append(colorize_match_data(matchData))
             commonRelsRow.append('\n'.join(commonRelsList))
 
         #--initialize table
@@ -2721,7 +2482,7 @@ class G2CmdShell(cmd.Cmd):
         tblColumns = []
         tblColumns.append({'name': 'Entity ID', 'width': 16, 'align': 'left'})
         for entityId in entityList:
-            tblColumns.append({'name': str(entityId), 'width': columnWidth, 'align': 'left'})
+            tblColumns.append({'name': colorize_entity(str(entityId)), 'width': columnWidth, 'align': 'left'})
 
         #--set the row titles
         rowTitles = {}
@@ -2735,7 +2496,7 @@ class G2CmdShell(cmd.Cmd):
         rowTitles['crossRelsRow'] = 'Cross relations'
         rowTitles['commonRelsRow'] = 'Common relations'
         for rowTitle in rowTitles:
-            rowTitles[rowTitle] = colorize(rowTitles[rowTitle], self.colors['rowtitle'])
+            rowTitles[rowTitle] = colorize(rowTitles[rowTitle], 'row_title')
 
         #--add the data
         tblRows = []
@@ -2759,7 +2520,7 @@ class G2CmdShell(cmd.Cmd):
         if len(''.join(commonRelsRow)) > 0:
             tblRows.append([rowTitles['commonRelsRow']] + commonRelsRow)
         
-        self.renderTable(tblTitle, tblColumns, tblRows, headerColor=self.colors['entityColumns'])
+        self.renderTable(tblTitle, tblColumns, tblRows)
 
         return 0
 
@@ -2825,10 +2586,6 @@ class G2CmdShell(cmd.Cmd):
             entity_id = current_parent_data['RELATED_ENTITY_LIST'][current_parent_data['NEXT_RELATED_ENTITY_I']]
             current_parent_list[len(current_parent_list)-1]['NEXT_RELATED_ENTITY_I'] += 1
             
-            #--bypass if already built
-            #if entity_id in nodes:
-            #    continue
-
             nodes[entity_id] = {}
             nodes[entity_id]['RELATED_ENTITY_LIST'] = []
 
@@ -2912,15 +2669,15 @@ class G2CmdShell(cmd.Cmd):
 
                     if nodes[entity_id][count_key] > 0:
                         class_node = Node(f'{nodes[entity_id]}-{class_name}')
-                        colorized_class_name = colorize(class_name, self.colors['highlight1'])
+                        #colorized_class_name = colorize(class_name, 'highlight1')
                         #class_node.node_desc = f'{colorized_class_name} ({nodes[entity_id][count_key]})'
                         class_node.node_desc = f'{class_name} ({nodes[entity_id][count_key]})'
 
-                        category_color = self.colors['highlight1'] if class_name == 'DISCLOSED' else self.colors['good']
+                        category_color = 'highlight2' if class_name == 'DISCLOSED' else 'good'
 
                         for category in sorted(nodes[entity_id][category_key].keys()):
                             category_node = Node(f'{nodes[entity_id]}-{category}')
-                            #colorized_category = colorize('+', self.colors['highlight1'] + ',dim').join(colorize(item, self.colors['highlight1']) for item in category.split('+'))
+                            #colorized_category = colorize('+', 'highlight1' + ',dim').join(colorize(item, 'highlight1') for item in category.split('+'))
                             colorized_category = colorize('+'.join(category.split('+')), category_color)
                             category_node.node_desc = f'{colorized_category} ({len(nodes[entity_id][category_key][category])})'
                             cnt = 0
@@ -2967,10 +2724,10 @@ class G2CmdShell(cmd.Cmd):
         if nodeId not in nodes:
             return f'{nodeId} not found!'
 
-        nodeDesc = colorize(nodeId, self.colors['entityid']) + ' '
+        nodeDesc = colorize_entity(nodeId) + ' '
 
         if 'RECORD_SUMMARY' in nodes[nodeId]:
-            nodeDesc += (' | '.join(colorize(ds['DATA_SOURCE'], self.colors['datasource']) for ds in nodes[nodeId]['RECORD_SUMMARY']) + ' ')
+            nodeDesc += (' | '.join(colorize_dsrc(ds['DATA_SOURCE']) for ds in nodes[nodeId]['RECORD_SUMMARY']) + ' ')
 
         if 'ENTITY_NAME' in nodes[nodeId]:
             nodeDesc += (nodes[nodeId]['ENTITY_NAME'])
@@ -3074,25 +2831,25 @@ class G2CmdShell(cmd.Cmd):
 
         if len(entityList) == 1:
             whyType = 'whyEntity'
-            tblTitle = 'Why for entity ID %s' % entityList[0]
+            tblTitle = f"Why for entity: {colorize_entity(entityList[0])}"
             firstRowTitle = 'INTERNAL_ID'
             entityData = self.whyEntity(entityList)
 
         elif len(entityList) == 2 and not oldWhyNot: #--whyEntities() only available in 2.0
             whyType = 'whyNot1'
-            tblTitle = 'Why NOT for listed entities'
+            tblTitle = f"Why not for entities: {', '.join([colorize_entity(i) for i in entityList])}"
             firstRowTitle = 'ENTITY_ID'
             entityData = self.whyNot2(entityList)
 
         elif len(entityList) == 4 and entityList[0].upper() in self.dsrcCodeLookup:
             whyType = 'whyRecords'
-            tblTitle = 'Why records - %s: %s vs %s: %s' % (entityList[0].upper(), entityList[1], entityList[2].upper(), entityList[3])
+            tblTitle = f"Why for record: {colorize_dsrc(entityList[0].upper())}: {entityList[1]} vs {colorize_dsrc(entityList[2].upper())}: {entityList[3]}"
             firstRowTitle = 'INTERNAL_ID'
             entityData = self.whyRecords(entityList)
 
         else:
             whyType = 'whyNot2'
-            tblTitle = 'Why NOT for listed entities'
+            tblTitle = f"Why not for entities: {', '.join([colorize_entity(i) for i in entityList])}"
             firstRowTitle = 'ENTITY_ID'
             entityData = self.whyNotMany(entityList)
 
@@ -3100,7 +2857,7 @@ class G2CmdShell(cmd.Cmd):
             printWithNewLines('No records found!', 'B')
             return -1 if calledDirect else 0
 
-        tblColumns = [{'name': colorize(firstRowTitle, self.colors['rowtitle']), 'width': 50, 'align': 'left'}]
+        tblColumns = [{'name': colorize(firstRowTitle, 'row_title'), 'width': 50, 'align': 'left'}]
         tblRows = []
 
         dataSourceRow = ['DATA_SOURCES']
@@ -3110,7 +2867,7 @@ class G2CmdShell(cmd.Cmd):
         for entityId in sorted(entityData.keys()):
 
             #--add the column
-            color = self.colors['entityid'] if firstRowTitle == 'ENTITY_ID' else 'dim'
+            color = 'entity_color' if firstRowTitle == 'ENTITY_ID' else 'dim'
             tblColumns.append({'name': colorize(entityId, color) , 'width': 75, 'align': 'left'})
 
             #--add the data sources
@@ -3122,20 +2879,20 @@ class G2CmdShell(cmd.Cmd):
                 for relationship in [x for x in sorted(entityData[entityId]['crossRelations'], key=lambda k: k['entityId'])]:
                     if len(entityList) <= 2: #--supress to entity if only 2
                         del relationship['entityId']
-                    relationList.append(formatMatchData(relationship))
+                    relationList.append(colorize_match_data(relationship))
                 crossRelationsRow.append('\n'.join(relationList))
 
             #--add the matchKey
             if 'whyKey' not in entityData[entityId] or not entityData[entityId]['whyKey']:
-                matchKeyRow.append(colorize('Not found!', self.colors['bad']))
+                matchKeyRow.append(colorize('Not found!', 'bad'))
             elif type(entityData[entityId]['whyKey']) != list:
-                matchKeyRow.append(formatMatchData(entityData[entityId]['whyKey'], self.colors))
+                matchKeyRow.append(colorize_match_data(entityData[entityId]['whyKey']))
             else:
                 tempList = []
                 for whyKey in [x for x in sorted(entityData[entityId]['whyKey'], key=lambda k: k['entityId'])]:
                     if 'entityId' in whyKey and len(entityList) <= 2:  #--supress to entity if only 2
                         del whyKey['entityId']
-                    tempList.append(formatMatchData(whyKey, self.colors))
+                    tempList.append(colorize_match_data(whyKey))
                 matchKeyRow.append('\n'.join(tempList))
 
             #--prepare the feature rows
@@ -3172,10 +2929,10 @@ class G2CmdShell(cmd.Cmd):
 
         #--colorize the first column
         for i in range(len(tblRows)):
-            tblRows[i][0] = colorize(tblRows[i][0], self.colors['rowtitle'])
+            tblRows[i][0] = colorize(tblRows[i][0], 'row_title')
 
         #--display the table
-        self.renderTable(tblTitle, tblColumns, tblRows, titleColor = self.colors['entityTitle'])
+        self.renderTable(tblTitle, tblColumns, tblRows)
 
         return 0
 
@@ -3582,7 +3339,7 @@ class G2CmdShell(cmd.Cmd):
             recordsBysource[record['DATA_SOURCE']].append(record['RECORD_ID'])
         recordDisplay = []
         for dataSource in sorted(recordsBysource.keys()):
-            coloredDataSource = colorize(dataSource, self.colors['datasource'])
+            coloredDataSource = colorize_dsrc(dataSource)
             if len(recordsBysource[dataSource]) > 1:
                 recordDisplay.append(f'{coloredDataSource}: {len(recordsBysource[dataSource])} records')
             else:
@@ -3616,17 +3373,17 @@ class G2CmdShell(cmd.Cmd):
         if 'wasScored' in featureData:
             if featureData['matchLevel'] in ('SAME', 'CLOSE'):
                 featureData['sortOrder'] = 1
-                featureData['featColor'] = self.colors['good'] 
+                featureData['featColor'] = 'good' 
             else:
                 featureData['sortOrder'] = 2
                 if not whyKey:
-                    featureData['featColor'] = self.colors['bad']
+                    featureData['featColor'] = 'bad'
                 elif type(whyKey) == dict and ('-' + ftypeCode) not in whyKey['matchKey']:
-                    featureData['featColor'] = self.colors['caution']
+                    featureData['featColor'] = 'caution'
                 elif type(whyKey) == list and ('-' + ftypeCode) not in whyKey[0]['matchKey']:
-                    featureData['featColor'] = self.colors['caution']
+                    featureData['featColor'] = 'caution'
                 else:
-                    featureData['featColor'] = self.colors['bad']
+                    featureData['featColor'] = 'bad'
             #if dimmit: 
             #    featureData['featColor'] += ',dim'
             featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], featureData['featColor'])
@@ -3640,14 +3397,14 @@ class G2CmdShell(cmd.Cmd):
 
         elif 'matchScore' in featureData: #--must be same and likley a candidate builder
             featureData['sortOrder'] = 1
-            featureData['featColor'] = self.colors['highlight1'] + (',dim' if dimmit else '')
+            featureData['featColor'] = 'highlight2' + (',dim' if dimmit else '')
             featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], featureData['featColor'])
             featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
 
         else:
             if ftypeCode == 'AMBIGUOUS_ENTITY' and featureData['formattedFeatDesc'] .startswith(' ['):
                 featureData['formattedFeatDesc']  = 'Ambiguous!'
-                featureData['formattedFeatDesc']  = colorize(featDesc, self.colors['bad'])
+                featureData['formattedFeatDesc']  = colorize(featDesc, 'bad')
             featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
 
         #--sort rejected matches lower 
@@ -3816,18 +3573,19 @@ class G2CmdShell(cmd.Cmd):
 
         return featRecord
 
+    # -----------------------------
     def help_how(self):
-        entity_id = colorize('<entity_id>', self.colors['entityid'])
+        entity_id = colorize_entity('<entity_id>')
         print(textwrap.dedent(f'''\
 
             Shows shows how the records in a single entity came together.
 
-            {colorize('Syntax:', self.colors['highlight1'])}
+            {colorize('Syntax:', 'highlight1')}
                 how {entity_id}               (shows a summary of the resolution process)
                 how {entity_id} concise       (shows the matching features as part of the tree view)
                 how {entity_id} formatted     (shows the matching features in a table)
 
-            {colorize('How to read:', self.colors['highlight1'])}
+            {colorize('How to read:', 'highlight1')}
                 A how report documents each step of the resoution process for an entity so if 
                 an entity has 100s records there will be 100s of steps. Each step will either 
                 create a virtual entity, add to it or combine it with other virtual entities 
@@ -3837,11 +3595,11 @@ class G2CmdShell(cmd.Cmd):
                 and address and another set that match on name and phone before a record with the 
                 same name, address and phone combines the two virtual entities into one!
 
-            {colorize('Pro tip!', self.colors['good'])}
+            {colorize('Pro tip!', 'good')}
                 The overview section helps you locate interesting resolution steps based that you
                 can search for in the concise or formatted view.  You can search for ...
                     - a particular step number such as step "2"
-                    - a virtual entity_id such as {colorize('V123-S2', self.colors['entityid'] + ',dim')}
+                    - a virtual entity_id such as {colorize_entity('V123-S2', 'dim')}
                         {colorize('(the -S number after the virtual entity ID is the step number that updated it.  Try', 'italics')} 
                             {colorize('searching for just the V number before the dash to find all steps that include it.)', 'italics')} 
                     - any other string such as a match_key, principle code, specific name, address, etc
@@ -3933,7 +3691,7 @@ class G2CmdShell(cmd.Cmd):
                 else:
                     stat_pack['features'][ftype_id][feat_desc] += 1
 
-        howFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
+        howFlagList = ['G2_HOW_ENTITY_DEFAULT_FLAGS']
         howFlagBits = self.computeApiFlags(howFlagList)
         try:
             response = bytearray()
@@ -3950,10 +3708,10 @@ class G2CmdShell(cmd.Cmd):
             showApiDebug('howEntity', apiCall, howFlagList, json_data)
 
         entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
-        how_header = colorize(f"\nHow report for entity: {entity_id} - {entity_name}\n", self.colors['entityid'])
+        how_header = '\n' + colorize(f"How report for entity {colorize_entity(entity_id)}: {entity_name}", 'table_title') + '\n'
         if json_data['HOW_RESULTS']['FINAL_STATE'].get('NEED_REEVALUATION', 0) or \
            len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']) > 1:
-            how_header += colorize('REEVALUATION NEEDED!', self.colors['bad']) + '\n'
+            how_header += colorize('REEVALUATION NEEDED!', 'bad') + '\n'
 
         #--annotate steps and create aggregate dictionary
         stat_pack['largest_combine_steps'] = {}
@@ -4003,7 +3761,7 @@ class G2CmdShell(cmd.Cmd):
 
             step_data['MATCH_INFO']['matchKey'] = step_data['MATCH_INFO']['MATCH_KEY']
             step_data['MATCH_INFO']['ruleCode'] = self.getRuleDesc(step_data['MATCH_INFO']['ERRULE_CODE'])
-            formatted_match_key, formatted_errule_code = formatMatchData(step_data['MATCH_INFO'], self.colors).split('\n ')
+            formatted_match_key, formatted_errule_code = colorize_match_data(step_data['MATCH_INFO']).split('\n ')
             step_data['MATCH_INFO']['formatted_match_key'] = formatted_match_key
             step_data['MATCH_INFO']['formatted_errule_code'] = formatted_errule_code
             if formatted_errule_code not in stat_pack['rules']:
@@ -4084,7 +3842,7 @@ class G2CmdShell(cmd.Cmd):
 
         #--create overview tree
         summary_node = Node('summary')
-        summary_node.node_desc = colorize('SUMMARY', 'bold')
+        summary_node.node_desc = colorize('SUMMARY', 'highlight1')
 
         resolution_node = Node('resolution')
         resolution_node.node_desc = self.how_format_statistic_header('RESOLUTION SUMMARY')
@@ -4146,18 +3904,18 @@ class G2CmdShell(cmd.Cmd):
         for rule_info in sorted(stat_pack['rule_counter'].items(), key=lambda item: item[1], reverse=True):
             rule = rule_info[0]
             rule_node = Node(rule)
-            rule_cnt = colorize(f"({rule_info[1]})", self.colors['highlight2'])
+            rule_cnt = colorize(f"({rule_info[1]})", 'highlight2')
             rule_node.node_desc = f"{rule} {rule_cnt}"
             category_node.add_child(rule_node)
             for match_key_info in sorted(stat_pack['rules'][rule].items() , key=lambda item: item[1],reverse=True):
                 match_key = match_key_info[0]
                 match_key_node = Node(match_key)
-                match_key_cnt = colorize(f"({match_key_info[1]})", self.colors['highlight2'])
+                match_key_cnt = colorize(f"({match_key_info[1]})", 'highlight2')
                 match_key_node.node_desc = f"{match_key} {match_key_cnt}"
                 rule_node.add_child(match_key_node)
 
         category_node = Node('entity')
-        category_node.node_desc = colorize('ENTITY SUMMARY', self.colors['highlight1'])
+        category_node.node_desc = self.how_format_statistic_header('ENTITY SUMMARY')
         summary_node.add_child(category_node)
 
         for stat_data in [['Total record count', total_record_count], 
@@ -4168,8 +3926,8 @@ class G2CmdShell(cmd.Cmd):
 
         for ftype_id in sorted(stat_pack['features'], key=lambda k: self.featureSequence[k]):
             ftype_node = Node(ftype_id)
-            ftype_cnt = colorize(f"({stat_pack['ftype_counter'][ftype_id]['featureCount']})", self.colors['highlight2'])
-            ftype_node.node_desc = f"{colorize(self.ftypeLookup[ftype_id]['FTYPE_CODE'], self.colors['rowtitle'])} {ftype_cnt}"
+            ftype_cnt = colorize(f"({stat_pack['ftype_counter'][ftype_id]['featureCount']})", 'highlight2')
+            ftype_node.node_desc = f"{colorize_attr(self.ftypeLookup[ftype_id]['FTYPE_CODE'])} {ftype_cnt}"
             category_node.add_child(ftype_node)
             feat_desc_info_list = sorted(stat_pack['features'][ftype_id].items() , key=lambda item: item[1],reverse=True)
             cnt = 0
@@ -4178,7 +3936,7 @@ class G2CmdShell(cmd.Cmd):
                 if cnt in (1, 2, len(feat_desc_info_list), len(feat_desc_info_list)-1):
                     feat_desc = feat_desc_info[0]
                     feat_node = Node(feat_desc)
-                    feat_cnt = colorize(f"({feat_desc_info[1]})", self.colors['highlight2'])
+                    feat_cnt = colorize(f"({feat_desc_info[1]})", 'highlight2')
                     if any(i in feat_desc for i in ['[~','[!','[#']):
                         feat_desc = colorize(feat_desc, 'dim')
                     feat_node.node_desc = f"{feat_desc} {feat_cnt}"
@@ -4197,7 +3955,7 @@ class G2CmdShell(cmd.Cmd):
                 parent_node_id = render_node_data['parent_node']
 
                 #--describe the node 
-                colored_node_id = colorize(render_node_id, self.colors['entityid'])
+                colored_node_id = colorize_entity(render_node_id)
                 if parent_node_id == 'root':
                     num_final_nodes = len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES'])
                     final_node_index = 0
@@ -4208,7 +3966,7 @@ class G2CmdShell(cmd.Cmd):
                     if num_final_nodes == 1:
                         render_node_desc = colorize(f"{colored_node_id}: final entity", 'dim')
                     else:
-                        render_node_desc = colorize(f"{colored_node_id}: final entity {render_node_index} of {num_final_nodes}", 'dim')
+                        render_node_desc = colorize(f"{colored_node_id}: final entity {final_node_index} of {num_final_nodes}", 'dim')
                 else:
                     render_node_desc = colorize(f"{colored_node_id}: interim entity", 'dim')
 
@@ -4281,6 +4039,7 @@ class G2CmdShell(cmd.Cmd):
 
                                 if matched_feat_id not in features2:
                                     feature_data['record_key2'] = 'ERROR' + self.dsrc_record_sep + 'MISSING'
+                                    input(f"wait {feature_data['record_key2']}")
                                 else:
                                     if best_record_key2 in features2[matched_feat_id]['record_list']:
                                         feature_data['record_key2'] = best_record_key2
@@ -4293,12 +4052,8 @@ class G2CmdShell(cmd.Cmd):
 
                             features_by_type[ftype_id][side].append(feature_data)
 
-                    colored_virtual_id1 = colorize(step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
-                    colored_virtual_id2 = colorize(step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'], self.colors['entityid'] + ',dim')
-                    #vid1_parts = step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'].split('-')
-                    #vid2_parts = step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'].split('-')
-                    #colored_virtual_id1 = colorize(vid1_parts[0], self.colors['entityid'] + ',dim') + (colorize('-' + vid1_parts[1],'dim') if len(vid1_parts) > 1 else '')
-                    #colored_virtual_id2 = colorize(vid2_parts[0], self.colors['entityid'] + ',dim') + (colorize('-' + vid2_parts[1],'dim') if len(vid2_parts) > 1 else '')
+                    colored_virtual_id1 = colorize_entity(step_data[left_virtual_entity]['VIRTUAL_ENTITY_ID'], 'dim')
+                    colored_virtual_id2 = colorize_entity(step_data[right_virtual_entity]['VIRTUAL_ENTITY_ID'], 'dim')
 
                     if how_display_level == 'concise':
                         step_node_desc += f"\n{colored_virtual_id1} {step_data[left_virtual_entity]['colored_desc']} {step_data[left_virtual_entity]['entity_name']}"
@@ -4308,9 +4063,9 @@ class G2CmdShell(cmd.Cmd):
                         step_node_text = ''
                         for ftypeId in sorted(features_by_type.keys(), key=lambda k: self.featureSequence[k]):
                             for featureData in sorted(sorted(features_by_type[ftypeId]['left'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
-                                coloredFtypeCode = colorize(featureData['ftypeCode'], self.colors['rowtitle'])
-                                coloredRecordKey1 = colorize(': '.join(featureData['record_key1'].split(self.dsrc_record_sep)), self.colors['datasource'])
-                                coloredRecordKey2 = colorize(': '.join(featureData['record_key2'].split(self.dsrc_record_sep)), self.colors['datasource'])
+                                coloredFtypeCode = colorize_attr(featureData['ftypeCode'])
+                                coloredRecordKey1 = colorize_dsrc(': '.join(featureData['record_key1'].split(self.dsrc_record_sep)))
+                                coloredRecordKey2 = colorize_dsrc(': '.join(featureData['record_key2'].split(self.dsrc_record_sep)))
                                 coloredMatchScore = colorize(f"({featureData['matchScoreDisplay']})", featureData['featColor'])
                                 step_node_text += f"{coloredFtypeCode}: {coloredRecordKey1} - {featureData['featDesc']} | {coloredRecordKey2} - {featureData['matchedFeatDesc']} {coloredMatchScore}\n"
                     elif how_display_level != 'summary':
@@ -4323,7 +4078,7 @@ class G2CmdShell(cmd.Cmd):
                         tblColumns.append({'name': colored_virtual_id2, 'width': 75, 'align': 'left'})
                         tblRows = []
 
-                        row_title = colorize('DATA_SOURCES', self.colors['rowtitle'])
+                        row_title = colorize('DATA_SOURCES', 'row_title')
                         tblRow = [row_title]
                         for virtual_entity_data in [[left_virtual_entity, best_left_record_key], 
                                                     [right_virtual_entity, best_right_record_key]]:
@@ -4332,7 +4087,7 @@ class G2CmdShell(cmd.Cmd):
                             if step_data[virtual_entity]['node_type'] == 'singleton':
                                 dsrc_display = step_data[virtual_entity]['colored_desc']
                             else:
-                                dsrc_display = step_data[virtual_entity]['node_desc'] + '\n best: ' + colorize(': '.join(best_record_key.split(self.dsrc_record_sep)), self.colors['datasource'])
+                                dsrc_display = step_data[virtual_entity]['node_desc'] + '\n best: ' + colorize_dsrc(': '.join(best_record_key.split(self.dsrc_record_sep)))
                             tblRow.append(dsrc_display)
                         tblRow.insert(2, '') #--for score column
                         tblRows.append(tblRow)
@@ -4341,7 +4096,7 @@ class G2CmdShell(cmd.Cmd):
                             if not features_by_type[ftypeId]['left'] and not features_by_type[ftypeId]['right']:
                                 continue #-- removes unscored if not full
                             ftype_code = self.ftypeLookup[ftypeId]['FTYPE_CODE']
-                            colored_ftype_code = colorize(ftype_code, self.colors['rowtitle'])
+                            colored_ftype_code = colorize_attr(ftype_code)
 
                             #--get the right side values
                             scored_right = {}
@@ -4360,18 +4115,18 @@ class G2CmdShell(cmd.Cmd):
 
                                     feature_desc1 = feature_data['formattedFeatDesc1'] 
                                     if step_data[left_virtual_entity]['node_type'] != 'singleton':
-                                        from_desc = 'from: ' + colorize(': '.join(feature_data['record_key1'].split(self.dsrc_record_sep)), self.colors['datasource'])
+                                        from_desc = 'from: ' + colorize_dsrc(': '.join(feature_data['record_key1'].split(self.dsrc_record_sep)))
                                         if feature_data['record_key1'] == best_left_record_key:
                                             from_desc = colorize(from_desc, 'dim')
                                         feature_desc1 += '\n ' + from_desc
 
                                     if feature_data['matchedFeatId'] not in scored_right:
-                                        feature_desc2 = colorize(f"Internal error: {feature_data['matchedFeatId']} missing from {colored_virtual_id2}", self.colors['bad'])
-                                        #input(feature_desc2 + ', press any key')
+                                        feature_desc2 = colorize(f"Internal error: {feature_data['matchedFeatId']} missing from {colored_virtual_id2}", 'bad')
+                                        #input(feature_desc2 + ', press enter')
                                     else:
                                         feature_desc2 = scored_right[feature_data['matchedFeatId']]['formattedFeatDesc1'] 
                                     if step_data[right_virtual_entity]['node_type'] != 'singleton':
-                                        from_desc = 'from: ' + colorize(': '.join(feature_data['record_key2'].split(self.dsrc_record_sep)), self.colors['datasource'])
+                                        from_desc = 'from: ' + colorize_dsrc(': '.join(feature_data['record_key2'].split(self.dsrc_record_sep)))
                                         if feature_data['record_key2'] == best_right_record_key:
                                             from_desc = colorize(from_desc, 'dim')
                                         feature_desc2 += '\n ' + from_desc
@@ -4411,23 +4166,26 @@ class G2CmdShell(cmd.Cmd):
                     temp_node.add_child(parent_node)
                     how_report = temp_node.render_tree(filter_str)
                 elif len(tree_nodes['root'].children) > 1:
-                    tree_nodes['root'].node_desc = colorize('Multiple final entities!', self.colors['bad'])
+                    tree_nodes['root'].node_desc = colorize('Multiple final entities!', 'bad')
                     how_report = tree_nodes['root'].render_tree(filter_str)
                 else:
                     how_report = tree_nodes['root'].children[0].render_tree(filter_str)
+            else:
+                how_report = 'There are no resolution steps to display!'
 
             if filter_str and filter_str not in how_report:
-                input(f"\n{filter_str} was not found, press any key")
+                input(f"\n{filter_str} was not found, press enter to continue")
                 filter_str = None
             else:
-                self.currentRenderString = how_header + ('\nFiltered for ' + colorize(filter_str, 'fg.white,bg.red') + '\n' if filter_str else '') + '\n' + how_report
+                self.currentRenderString = how_header + ('\nFiltered for ' + colorize(filter_str, 'fg_white,bg_red') + '\n' if filter_str else '') + '\n' + how_report
+
 
             if filter_str:
                 self.do_scroll(search=filter_str)
             else:
                 self.do_scroll('auto')
 
-            reply = input('\nSelect (O)verview, (C)oncise view, (F)ormatted view, (S)earch or (Q)uit ... ')
+            reply = input(colorize_prompt('\nSelect (O)verview, (C)oncise view, (F)ormatted view, (S)earch or (Q)uit ... '))
             if reply:
                 removeFromHistory()
             else:
@@ -4435,8 +4193,9 @@ class G2CmdShell(cmd.Cmd):
 
             if reply.upper() in ('Q', 'QUIT'): 
                 break
-            elif reply.upper() == ('O'): 
+            elif reply.upper() == ('O'):
                 how_display_level = 'overview'
+                filter_str = None
             elif reply.upper() == ('C'):
                 how_display_level = 'concise'
             elif reply.upper() == ('F'):
@@ -4457,7 +4216,7 @@ class G2CmdShell(cmd.Cmd):
             if filter_str and filter_str.isnumeric():
                 filter_str = f"Step {filter_str}"
                 if filter_str not in tree_nodes:
-                    input(f"\nStep {filter_str} not found, press any key")
+                    input(f"\nStep {filter_str} not found, press enter to continue")
                     filter_str = None  
 
             #--check if they entered a node_id
@@ -4511,12 +4270,12 @@ class G2CmdShell(cmd.Cmd):
             virtual_entity_data['node_type'] = 'singleton'
             record = raw_virtual_entity_data['MEMBER_RECORDS'][0]['RECORDS'][0]
             virtual_entity_data['node_desc'] = record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note
-            virtual_entity_data['colored_desc'] = colorize(record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note, self.colors['datasource']) 
+            virtual_entity_data['colored_desc'] = colorize_dsrc(record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note) 
 
         else:
             virtual_entity_data['node_type'] = 'aggregate'
             virtual_entity_data['node_desc'] = ' | '.join(\
-                colorize(ds + ' (' + str(len(virtual_entity_data['records'][ds])) + ')', self.colors['datasource']) \
+                colorize_dsrc(ds + ' (' + str(len(virtual_entity_data['records'][ds])) + ')') \
                 for ds in sorted(virtual_entity_data['records'].keys()))
             virtual_entity_data['colored_desc'] = virtual_entity_data['node_desc']
 
@@ -4524,11 +4283,11 @@ class G2CmdShell(cmd.Cmd):
 
     # -----------------------------
     def how_format_statistic_header(self, header):
-        return colorize(header, self.colors['highlight1'])
+        return colorize(header, 'highlight2')
 
     # -----------------------------
     def how_format_statistic(self, stat, cnt):
-        return stat + ' ' + colorize('(' + str(cnt) + ')', self.colors['highlight2'])
+        return stat + ' ' + colorize('(' + str(cnt) + ')', 'highlight2')
 
     # -----------------------------
     def do_score(self, arg): 
@@ -4582,16 +4341,16 @@ class G2CmdShell(cmd.Cmd):
 
         #--possible kwargs
         displayFlag = kwargs['displayFlag'] if 'displayFlag' in kwargs else None 
-        titleColor = kwargs['titleColor'] if 'titleColor' in kwargs else self.colors['tableTitle']
+        titleColor = kwargs['titleColor'] if 'titleColor' in kwargs else 'table_title'
         titleJustify = kwargs['titleJustify'] if 'titleJustify' in kwargs else 'l' #--left
-        headerColor = kwargs['headerColor'] if 'headerColor' in kwargs else self.colors['columnHeader']
+        headerColor = kwargs['headerColor'] if 'headerColor' in kwargs else 'column_header'
 
         #--setup the table
         tableWidth = 0
         columnHeaderList = []
         for i in range(len(tblColumns)):
             tableWidth += tblColumns[i]['width']
-            tblColumns[i]['name'] = str(tblColumns[i]['name'])
+            tblColumns[i]['name'] = colorize(str(tblColumns[i]['name']), 'column_header')
             columnHeaderList.append(tblColumns[i]['name'])
         #tableObject = ColoredTable(title_color=titleColor, header_color=headerColor, title_justify=titleJustify)
         tableObject = PrettyTable()
@@ -4639,10 +4398,11 @@ class G2CmdShell(cmd.Cmd):
 
         # display if a single table or done acculating tables to display
         if not displayFlag or displayFlag == 'end':
-            print('')
             if self.currentReviewList:
-                print(colorize(self.currentReviewList, 'bold'))
+                self.currentRenderString = colorize(self.currentReviewList, 'bold') + '\n\n' + self.currentRenderString
+            print('')
             self.do_scroll('auto')
+            print('')
         return
 
     # -----------------------------
@@ -4655,14 +4415,15 @@ class G2CmdShell(cmd.Cmd):
         #--note: the F allows less to auto quit if output fits on screen
         #-- if they purposely went into scroll mode, we should not auto-quit!
         if arg == 'auto':  
-            lessOptions = 'FMXSR'
+            lessOptions = '-FMXSR'
         else:
-            lessOptions = 'MXSR'
+            lessOptions = '-MXSR'
         if search:
-            lessOptions +'/' + search
+            lessOptions +' /' + search
+
 
         #--try pipe to less on small enough files (pipe buffer usually 1mb and fills up on large entity displays)
-        less = subprocess.Popen(["less", "-FMXSR"], stdin=subprocess.PIPE)
+        less = subprocess.Popen(["less", lessOptions], stdin=subprocess.PIPE)
         try:
             less.stdin.write(self.currentRenderString.encode('utf-8'))
         except IOError:
@@ -4687,7 +4448,7 @@ class G2CmdShell(cmd.Cmd):
         maxDegree = 0
         additive = False
 
-        arg = arg.replace(',', '')
+        arg = arg.replace(',', ' ')
         arglist = arg.split()
         i = 0
         while i < len(arglist):
@@ -4788,7 +4549,7 @@ class G2CmdShell(cmd.Cmd):
 
     # -----------------------------
     def getRuleDesc(self, erruleCode):
-        return ('RULE ' + str(self.erruleCodeLookup[erruleCode]['ERRULE_ID']) + ': ' + erruleCode  if erruleCode in self.erruleCodeLookup else '')
+        return ('Principle ' + str(self.erruleCodeLookup[erruleCode]['ERRULE_ID']) + ': ' + erruleCode  if erruleCode in self.erruleCodeLookup else '')
 
     # -----------------------------
     def getConfigData(self, table, field = None, value = None):
@@ -4861,55 +4622,6 @@ class G2CmdShell(cmd.Cmd):
                 for flagName in flagList:
                     flagBits = flagBits | getattr(g2Engine, flagName)
                 return flagBits
-
-# ===== utility functions =====
-
-# -----------------------------
-def colorizeAttribute(attrStr, color):
-    if ':' in attrStr:
-        attrName = attrStr[0:attrStr.find(':')+1]
-        attrValue = attrStr[attrStr.find(':')+1:].strip()
-        return colorize(attrName, color) + ' ' + attrValue
-    else:
-        return attrStr
-
-# -----------------------------
-def formatMatchData(matchDict, colorscheme = None):
-
-    if not matchDict['matchKey']:
-        matchStr = colorize('not found!', 'bg.red,fg.white')
-    else:
-        if colorscheme:
-            goodSegments = []
-            badSegments = []
-            priorKey = ''
-            keyColor = 'fg.green'
-            for key in re.split('(\+|\-)', matchDict['matchKey']):
-                if key in ('+',''): 
-                    priorKey = '+'
-                elif key == '-':
-                    priorKey = '-'
-                elif priorKey == '-':
-                    badSegments.append(key)
-                else:
-                    goodSegments.append(key)
-            if goodSegments:
-                matchStr = colorize('+'.join(goodSegments), colorscheme['good'])
-            else:
-                matchStr = ''
-            if badSegments:
-                matchStr += colorize('-' + '-'.join(badSegments), colorscheme['bad'])
-
-        else:
-            matchStr = matchDict['matchKey']
-
-    if 'ruleCode' in matchDict:
-        matchStr += ('\n ' + colorize('%s' % matchDict['ruleCode'], 'dim'))
-
-    if 'entityId' in matchDict:
-        matchStr += colorize(' to %s' % matchDict['entityId'], 'dim')
-
-    return matchStr
 
 #----------------------------------------
 def showApiDebug(processName, apiCall, apiFlagList, jsonResponse):
@@ -5076,10 +4788,10 @@ if __name__ == '__main__':
         print('\nAn ini file was not found, please supply with the -c parameter\n')
         sys.exit(1)
  
-    splash = '\n  ____|  __ \\     \\    \n'
-    splash += '  __|    |   |   _ \\   Senzing G2\n'
-    splash += '  |      |   |  ___ \\  Exploratory Data Analysis\n'
-    splash += ' _____| ____/ _/    _\\ \n'
+    splash = colorize('\n  ____|  __ \\     \\    \n', 'FG_LIGHTBLACK')
+    splash += colorize('  __|    |   |   _ \\   ', 'FG_LIGHTBLACK') + 'Senzing G2\n'
+    splash += colorize('  |      |   |  ___ \\  ', 'FG_LIGHTBLACK') + 'Exploratory Data Analysis\n'
+    splash += colorize(' _____| ____/ _/    _\\ \n', 'FG_LIGHTBLACK')
     prompt = '(g2) '
     print(splash)
 
