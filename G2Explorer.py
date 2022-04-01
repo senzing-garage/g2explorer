@@ -1034,7 +1034,7 @@ class G2CmdShell(cmd.Cmd):
                 continue
             try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -1045,7 +1045,7 @@ class G2CmdShell(cmd.Cmd):
             jsonData = json.loads(response)
 
             if debugOutput:
-                apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+                apiCall = f'getEntityByEntityID({entityId}, response, {getFlagBits})'
                 showApiDebug('auditResult', apiCall, getFlagList, jsonData)
 
             #--get the list of features for the entity
@@ -1716,7 +1716,7 @@ class G2CmdShell(cmd.Cmd):
 
             try:
                 response = bytearray()
-                retcode = g2Engine.searchByAttributesV2(json.dumps(searchJson), searchFlagBits, response)
+                retcode = g2Engine.searchByAttributes(json.dumps(searchJson), response, searchFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print(json.dumps(searchJson, indent=4))
@@ -1725,7 +1725,7 @@ class G2CmdShell(cmd.Cmd):
             jsonResponse = json.loads(response)
             if debugOutput:
                 showDebug('searchMessage', searchJson)
-                apiCall = f'searchByAttributesV2(searchMessage, {searchFlagBits}, response)'
+                apiCall = f'searchByAttributes(searchMessage, response, {searchFlagBits})'
                 showApiDebug('search', apiCall, searchFlagList, jsonResponse)
 
             #--constants for descriptions and sort orders
@@ -1940,20 +1940,20 @@ class G2CmdShell(cmd.Cmd):
         getFlagBits = self.computeApiFlags(getFlagList)
 
         if len(arg.split()) == 1:
-            apiCall = f'getEntityByEntityIDV2({arg}, {getFlagBits}, response)'
+            apiCall = f'getEntityByEntityID({arg}, response, {getFlagBits})'
             try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(arg), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(arg), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
                 return -1 if calledDirect else 0
 
         elif len(arg.split()) == 2:
-            apiCall = f'getEntityByRecordIDV2("{arg.split()[0]}", "{arg.split()[1]}", {getFlagBits}, response)'
+            apiCall = f'getEntityByRecordID("{arg.split()[0]}", "{arg.split()[1]}", response, {getFlagBits})'
             try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByRecordIDV2(arg.split()[0], arg.split()[1], getFlagBits, response)
+                retcode = g2Engine.getEntityByRecordID(arg.split()[0], arg.split()[1], response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -2144,10 +2144,10 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
         getFlagBits = self.computeApiFlags(getFlagList)
 
-        apiCall = f'getEntityByEntityIDV2({entityID}, {getFlagBits}, response)'
+        apiCall = f'getEntityByEntityID({entityID}, response, {getFlagBits})'
         try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), getFlagBits, response)
+            retcode = g2Engine.getEntityByEntityID(int(entityID), response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             printWithNewLines(str(err), 'B')
@@ -2226,14 +2226,14 @@ class G2CmdShell(cmd.Cmd):
         getFlagBits = self.computeApiFlags(getFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+            retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print(str(err))
             return None
         jsonData2 = json.loads(response)
         if debugOutput:
-            apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+            apiCall = f'getEntityByEntityID({entityId}, response, {getFlagBits})'
             showApiDebug('getAmbiguousEntitySet', apiCall, getFlagList, jsonData2)
 
         ambiguousEntity = 'AMBIGUOUS_ENTITY' in jsonData2['RESOLVED_ENTITY']['FEATURES']
@@ -2313,7 +2313,7 @@ class G2CmdShell(cmd.Cmd):
         for entityId in entityList:
             try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -2325,7 +2325,7 @@ class G2CmdShell(cmd.Cmd):
 
             jsonData = json.loads(response)
             if debugOutput:
-                apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+                apiCall = f'getEntityByEntityID({entityId}, response, {getFlagBits})'
                 showApiDebug('compare', apiCall, getFlagList, jsonData)
 
             entityData = {}
@@ -2558,10 +2558,10 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
         getFlagBits = self.computeApiFlags(getFlagList)
 
-        apiCall = f'findNetworkByEntityIDV2({entityParameter} {maxDegree} {buildOutDegree} {maxEntities} {getFlagBits})'
+        apiCall = f'findNetworkByEntityID({entityParameter} {maxDegree} {buildOutDegree} {maxEntities} {getFlagBits})'
         try:
             response = bytearray()
-            retcode = g2Engine.findNetworkByEntityIDV2(entityParameter, maxDegree, buildOutDegree, maxEntities, getFlagBits, response)
+            retcode = g2Engine.findNetworkByEntityID(entityParameter, maxDegree, buildOutDegree, maxEntities, response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print(f'\n{err}\n')
@@ -2942,7 +2942,7 @@ class G2CmdShell(cmd.Cmd):
         whyFlagBits = self.computeApiFlags(whyFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.whyEntityByEntityIDV2(int(entityList[0]), whyFlagBits, response)
+            retcode = g2Engine.whyEntityByEntityID(int(entityList[0]), response, whyFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -2951,7 +2951,7 @@ class G2CmdShell(cmd.Cmd):
             return None
         jsonData = json.loads(response)
         if debugOutput:
-            apiCall = f'whyEntityByEntityIDV2({entityList[0]}, {whyFlagBits}, response)'
+            apiCall = f'whyEntityByEntityID({entityList[0]}, response, {whyFlagBits})'
             showApiDebug('whyEntity', apiCall, whyFlagList, jsonData)
 
         entityData = {}
@@ -2980,7 +2980,7 @@ class G2CmdShell(cmd.Cmd):
         whyFlagBits = self.computeApiFlags(whyFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.whyRecordsV2(entityList[0], entityList[1], entityList[2], entityList[3], whyFlagBits, response)
+            retcode = g2Engine.whyRecords(entityList[0], entityList[1], entityList[2], entityList[3], response, whyFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -2989,7 +2989,7 @@ class G2CmdShell(cmd.Cmd):
             return None
         jsonData = json.loads(response)
         if debugOutput:
-            apiCall = f'whyRecordsV2("{entityList[0]}", "{entityList[1]}", "{entityList[2]}", "{entityList[3]}", {whyFlagBits}, response)'
+            apiCall = f'whyRecords("{entityList[0]}", "{entityList[1]}", "{entityList[2]}", "{entityList[3]}", response, {whyFlagBits})'
             showApiDebug('whyEntity', apiCall, whyFlagList, jsonData)
 
         entityData = {}
@@ -3045,7 +3045,7 @@ class G2CmdShell(cmd.Cmd):
         whyFlagBits = self.computeApiFlags(whyFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.whyEntitiesV2(int(entityList[0]), int(entityList[1]), whyFlagBits, response)
+            retcode = g2Engine.whyEntities(int(entityList[0]), int(entityList[1]), response, whyFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3054,7 +3054,7 @@ class G2CmdShell(cmd.Cmd):
             return None
         jsonData = json.loads(response)
         if debugOutput:
-            apiCall = f'whyEntitiesV2({entityList[0]}, {entityList[1]}, {whyFlagBits}, response)'
+            apiCall = f'whyEntities({entityList[0]}, {entityList[1]}, response, {whyFlagBits})'
             showApiDebug('basic whyNot (between 2 entities)', apiCall, whyFlagList, jsonData)
 
         entityData = {}
@@ -3134,7 +3134,7 @@ class G2CmdShell(cmd.Cmd):
             entityData[entityId] = {}
             try:
                 response = bytearray()
-                retcode = g2Engine.whyEntityByEntityIDV2(int(entityId), whyFlagBits, response)
+                retcode = g2Engine.whyEntityByEntityID(int(entityId), response, whyFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -3144,7 +3144,7 @@ class G2CmdShell(cmd.Cmd):
                 printWithNewLines('No records found for %s' % entityId, 'B')
                 return None
             if debugOutput:
-                apiCall = f'whyEntityByEntityIDV2({entityId}, {whyFlagBits}, response)'
+                apiCall = f'whyEntityByEntityID({entityId}, response, {whyFlagBits})'
                 showApiDebug('advanced whyNot - step 1 (get features and usage stats) ', apiCall, whyFlagList, jsonData)
 
             #--add the data sources and create search json
@@ -3198,14 +3198,14 @@ class G2CmdShell(cmd.Cmd):
             getFlagBits = self.computeApiFlags(getFlagList)
             try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print(str(err))
                 return
             jsonData2 = json.loads(response)
             if debugOutput:
-                apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+                apiCall = f'getEntityByEntityID({entityId}, response, {getFlagBits})'
                 showApiDebug('advanced whyNot - step 2 (get actual relationships)', apiCall, getFlagList, jsonData2)
 
             entityData[entityId]['crossRelations'] = []
@@ -3240,7 +3240,7 @@ class G2CmdShell(cmd.Cmd):
             jsonData2 = json.loads(response)
             if debugOutput:
                 showDebug('searchMessage', searchJson)
-                apiCall = f'searchByAttributesV2(searchMessage, {searchFlagBits}, response)'
+                apiCall = f'searchByAttributes(searchMessage, response, {searchFlagBits})'
                 showApiDebug('advanced whyNot - step 3 (search to see if it can find the others)', apiCall, searchFlagList, jsonData2)
 
             entityData[entityId]['whyKey'] = []
@@ -3640,10 +3640,10 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_OPTION_INCLUDE_FEATURE_STATS')
         getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS')
         getFlagBits = self.computeApiFlags(getFlagList)
-        apiCall = f'getEntityByEntityIDV2({entity_id}, {getFlagBits}, response)'
+        apiCall = f'getEntityByEntityID({entity_id}, response, {getFlagBits})'
         try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(entity_id, getFlagBits, response)
+            retcode = g2Engine.getEntityByEntityID(entity_id, response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3695,7 +3695,7 @@ class G2CmdShell(cmd.Cmd):
         howFlagBits = self.computeApiFlags(howFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.howEntityByEntityIDV2(entity_id, howFlagBits, response)
+            retcode = g2Engine.howEntityByEntityID(entity_id, response, howFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3704,11 +3704,11 @@ class G2CmdShell(cmd.Cmd):
             return -1 if calledDirect else 0
         json_data = json.loads(response)
         if debugOutput:
-            apiCall = f'howEntityByEntityIDV2({entity_id}, {howFlagBits}, response)'
+            apiCall = f'howEntityByEntityID({entity_id}, response, {howFlagBits})'
             showApiDebug('howEntity', apiCall, howFlagList, json_data)
 
         entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
-        how_header = '\n' + colorize(f"How report for entity {colorize_entity(entity_id)}: {entity_name}", 'table_title') + '\n'
+        how_header = colorize(f"\nHow report for entity: {entity_id} - {entity_name}\n", self.colors['entityid'])
         if json_data['HOW_RESULTS']['FINAL_STATE'].get('NEED_REEVALUATION', 0) or \
            len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']) > 1:
             how_header += colorize('REEVALUATION NEEDED!', 'bad') + '\n'
@@ -4516,10 +4516,10 @@ class G2CmdShell(cmd.Cmd):
             for entityId in currentEntityList:
                 exportedEntityList.append(entityId)
 
-                apiCall = f'getEntityByEntityIDV2({entityId})'
+                apiCall = f'getEntityByEntityID({entityId})'
                 try:
                     response = bytearray()
-                    retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                    retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                     response = response.decode() if response else ''
                 except G2Exception as err:
                     print('\n' + str(err) + '\n')
@@ -4842,4 +4842,6 @@ if __name__ == '__main__':
     g2Engine.destroy()
 
     sys.exit()
+
+
 
