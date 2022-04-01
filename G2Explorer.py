@@ -17,21 +17,21 @@ import readline
 import atexit
 from io import StringIO
 
-# try: 
+# try:
 #     from rich.table import Table
 #     from rich.console import Console
 #     has_rich = True
 # except: has_rich = False
- 
-try: 
-    from prettytable import PrettyTable 
+
+try:
+    from prettytable import PrettyTable
     from prettytable import ALL as PRETTY_TABLE_ALL
     try: #  supports both ptable and prettytable builds of prettytable (only prettytable has these styles)
         from prettytable import SINGLE_BORDER, DOUBLE_BORDER, MARKDOWN, ORGMODE
         pretty_table_style_available = True
     except:
         pretty_table_style_available = False
-except: 
+except:
     print('\nPlease install python pretty table (pip3 install prettytable)\n')
     sys.exit(1)
 
@@ -57,7 +57,7 @@ except:
         sys.exit(1)
 
 # ==============================
-class colors: 
+class colors:
     code = {}
     #--styles
     code['reset'] = '\033[0m'
@@ -114,7 +114,7 @@ class colors:
     #            wheel[len(wheel)] = ','.join([color1, color2])
 
 def colorize(string, colorList = None):
-    if colorList: 
+    if colorList:
         prefix = ''.join([colors.code[i.strip().lower()] for i in colorList.split(',')])
         suffix = colors.code['reset']
         return f'{prefix}{string}{suffix}'
@@ -258,7 +258,7 @@ class Node(object):
 
             filter_str_in_desc = False
             node_desc = next_node.node_desc
-            if node_desc and filter_str:    
+            if node_desc and filter_str:
                 if filter_str in node_desc:
                     node_desc = node_desc.replace(filter_str, colorize(filter_str, 'bg.red, fg.white'))
                     filter_str_in_desc = True
@@ -304,53 +304,53 @@ class G2CmdShell(cmd.Cmd):
         self.cfgData = cfgData
         self.dsrcLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_DSRC']:
-            self.dsrcLookup[cfgRecord['DSRC_ID']] = cfgRecord 
+            self.dsrcLookup[cfgRecord['DSRC_ID']] = cfgRecord
         self.dsrcCodeLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_DSRC']:
-            self.dsrcCodeLookup[cfgRecord['DSRC_CODE']] = cfgRecord 
+            self.dsrcCodeLookup[cfgRecord['DSRC_CODE']] = cfgRecord
         self.etypeLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_ETYPE']:
-            self.etypeLookup[cfgRecord['ETYPE_ID']] = cfgRecord 
+            self.etypeLookup[cfgRecord['ETYPE_ID']] = cfgRecord
         self.erruleLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_ERRULE']:
-            self.erruleLookup[cfgRecord['ERRULE_ID']] = cfgRecord 
+            self.erruleLookup[cfgRecord['ERRULE_ID']] = cfgRecord
         self.erruleCodeLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_ERRULE']:
-            self.erruleCodeLookup[cfgRecord['ERRULE_CODE']] = cfgRecord 
+            self.erruleCodeLookup[cfgRecord['ERRULE_CODE']] = cfgRecord
         self.ftypeLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_FTYPE']:
-            self.ftypeLookup[cfgRecord['FTYPE_ID']] = cfgRecord 
+            self.ftypeLookup[cfgRecord['FTYPE_ID']] = cfgRecord
         self.ftypeCodeLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_FTYPE']:
-            self.ftypeCodeLookup[cfgRecord['FTYPE_CODE']] = cfgRecord 
+            self.ftypeCodeLookup[cfgRecord['FTYPE_CODE']] = cfgRecord
 
         self.ftypeAttrLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_ATTR']:
             if cfgRecord['FTYPE_CODE'] not in self.ftypeAttrLookup:
                 self.ftypeAttrLookup[cfgRecord['FTYPE_CODE']] = {}
-            self.ftypeAttrLookup[cfgRecord['FTYPE_CODE']][cfgRecord['FELEM_CODE']] = cfgRecord 
+            self.ftypeAttrLookup[cfgRecord['FTYPE_CODE']][cfgRecord['FELEM_CODE']] = cfgRecord
 
         self.cfuncLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_CFUNC']:
-            self.cfuncLookup[cfgRecord['CFUNC_ID']] = cfgRecord 
+            self.cfuncLookup[cfgRecord['CFUNC_ID']] = cfgRecord
 
         self.cfrtnLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_CFRTN']:
-            self.cfrtnLookup[cfgRecord['CFUNC_ID']] = cfgRecord 
+            self.cfrtnLookup[cfgRecord['CFUNC_ID']] = cfgRecord
 
         self.scoredFtypeCodes = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_CFCALL']:
             cfgRecord['FTYPE_CODE'] = self.ftypeLookup[cfgRecord['FTYPE_ID']]['FTYPE_CODE']
             cfgRecord['CFUNC_CODE'] = self.cfuncLookup[cfgRecord['CFUNC_ID']]['CFUNC_CODE']
-            self.scoredFtypeCodes[cfgRecord['FTYPE_CODE']] = cfgRecord 
+            self.scoredFtypeCodes[cfgRecord['FTYPE_CODE']] = cfgRecord
 
         self.ambiguousFtypeID = self.ftypeCodeLookup['AMBIGUOUS_ENTITY']['FTYPE_ID']
 
         #--set feature display sequence
         self.featureSequence = {}
         self.featureSequence[self.ambiguousFtypeID] = 1 #--ambiguous is first
-        featureSequence = 2 
-        #--scored features second        
+        featureSequence = 2
+        #--scored features second
         for cfgRecord in sorted(self.cfgData['G2_CONFIG']['CFG_CFCALL'], key=lambda k: k['FTYPE_ID']):
             if cfgRecord['FTYPE_ID'] not in self.featureSequence:
                 self.featureSequence[cfgRecord['FTYPE_ID']] = featureSequence
@@ -415,8 +415,8 @@ class G2CmdShell(cmd.Cmd):
 
         #--default settings for data and cross sources summary reports
         self.configurable_settings_list = [
-            {'setting': 'color_scheme', 'values': ['light', 'dark'], 'description': 'light works better on dark backgrounds and vice-versa'}, 
-            {'setting': 'statistic_level', 'values': ['record', 'entity'], 'description': 'sets the statistical point of view of the data and crossSourceSummary reports'}, 
+            {'setting': 'color_scheme', 'values': ['light', 'dark'], 'description': 'light works better on dark backgrounds and vice-versa'},
+            {'setting': 'statistic_level', 'values': ['record', 'entity'], 'description': 'sets the statistical point of view of the data and crossSourceSummary reports'},
             {'setting': 'data_source_suppression', 'values': ['off', 'on'], 'description': 'restricts the data and crossSourceSummary reports to only applicable data sources'},
             {'setting': 'show_relations_on_get', 'values': ['off', 'on'], 'description': 'always display relationships if any with each get of an entity ... or not!'}
         ]
@@ -460,7 +460,7 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def cmdloop(self):
         while True:
-            try: 
+            try:
                 cmd.Cmd.cmdloop(self)
                 break
             except KeyboardInterrupt:
@@ -502,9 +502,9 @@ class G2CmdShell(cmd.Cmd):
         printWithNewLines(textwrap.dedent(f'''\
             - Use shell like history, requires Python readline module.
 
-            - Tries to create a history file in the users home directory for use across instances of G2ConfigTool. 
+            - Tries to create a history file in the users home directory for use across instances of G2ConfigTool.
 
-            - If a history file can't be created in the users home, /tmp is tried for temporary session history. 
+            - If a history file can't be created in the users home, /tmp is tried for temporary session history.
 
             - Ctrl-r can be used to search history when history is available
 
@@ -514,7 +514,7 @@ class G2CmdShell(cmd.Cmd):
                 - histDedupe = The history can accumulate duplicate entries over time, use this to remove them
                 - histShow = Display all history
 
-            - History Status: 
+            - History Status:
                 - Readline available: {self.readlineAvail}
                 - History available: {self.histAvail}
                 - History file: {self.histFileName}
@@ -524,57 +524,57 @@ class G2CmdShell(cmd.Cmd):
 
     def histCheck(self):
         '''  '''
-    
+
         self.histFileName = None
         self.histFileError = None
         self.histAvail = False
-    
+
         if not self.histDisable:
-    
+
             if readline:
                 tmpHist = '.' + os.path.basename(sys.argv[0].lower().replace('.py','_history'))
                 self.histFileName = os.path.join(os.path.expanduser('~'), tmpHist)
-    
-                #Try and open history in users home first for longevity 
+
+                #Try and open history in users home first for longevity
                 try:
                     open(self.histFileName, 'a').close()
                 except IOError as e:
                     self.histFileError = f'{e} - Couldn\'t use home, trying /tmp/...'
-    
+
                 #Can't use users home, try using /tmp/ for history useful at least in the session
                 if self.histFileError:
-    
+
                     self.histFileName = f'/tmp/{tmpHist}'
                     try:
                         open(self.histFileName, 'a').close()
                     except IOError as e:
                         self.histFileError = f'{e} - User home dir and /tmp/ failed!'
                         return
-    
+
                 hist_size = 2000
                 readline.read_history_file(self.histFileName)
                 readline.set_history_length(hist_size)
                 atexit.register(readline.set_history_length, hist_size)
                 atexit.register(readline.write_history_file, self.histFileName)
-                
+
                 self.histFileName = self.histFileName
                 self.histFileError = None
-                self.histAvail = True   
+                self.histAvail = True
 
 
     def do_histDedupe(self, arg):
 
         if self.histAvail:
             if input('\nThis will de-duplicate both this session history and the history file, are you sure? (y/n)  ') in ['y','Y', 'yes', 'YES']:
-    
+
                 with open(self.histFileName) as hf:
                     linesIn = (line.rstrip() for line in hf)
                     uniqLines = OrderedDict.fromkeys( line for line in linesIn if line )
-    
+
                     readline.clear_history()
                     for ul in uniqLines:
                         readline.add_history(ul)
-    
+
                 printWithNewLines('Session history and history file both deduplicated.', 'B')
             else:
                 print()
@@ -615,8 +615,8 @@ class G2CmdShell(cmd.Cmd):
     def help_set (self):
         print(textwrap.dedent(f'''\
 
-            {colorize('syntax:', self.colors['highlight1'])} 
-                set <setting> <value> 
+            {colorize('syntax:', self.colors['highlight1'])}
+                set <setting> <value>
 
             {colorize('settings:', self.colors['highlight1'])} '''))
         print(colorize(f"    {'setting':<25} {'[possible values]':<20} {'current':<11} {'description'}", 'bold'))
@@ -686,9 +686,9 @@ class G2CmdShell(cmd.Cmd):
         print()
         print('current api version is:', apiVersion['BUILD_VERSION'])
         if self.snapshotFile:
-            if self.snapshotData and 'API_VERSION' in self.snapshotData: 
+            if self.snapshotData and 'API_VERSION' in self.snapshotData:
                 print('snapshot api version was:', self.snapshotData['API_VERSION'])
-            if self.snapshotData and 'RUN_DATE' in self.snapshotData: 
+            if self.snapshotData and 'RUN_DATE' in self.snapshotData:
                 print('snapshot run date and time was:', self.snapshotData['RUN_DATE'])
         print()
 
@@ -711,12 +711,12 @@ class G2CmdShell(cmd.Cmd):
             print(f"\nError in {statpackFileName} ...\n\t{err}\n")
             return
 
-        if 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Snapshot'): #--'pocSnapshot', 
+        if 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Snapshot'): #--'pocSnapshot',
             self.current_settings['snapshotFile'] = statpackFileName
             self.snapshotFile = statpackFileName
             self.snapshotData = jsonData
             print(f"\nsucessfully loaded {statpackFileName}\n")
-        elif 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Audit'): #--'pocAudit', 
+        elif 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Audit'): #--'pocAudit',
             self.current_settings['auditFile'] = statpackFileName
             self.auditFile = statpackFileName
             self.auditData = jsonData
@@ -764,8 +764,8 @@ class G2CmdShell(cmd.Cmd):
         else: #--eventually deprecate the above
             g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
 
-        try: 
-            response = bytearray() 
+        try:
+            response = bytearray()
             g2_diagnostic_module.getDataSourceCounts(response)
             response = response.decode() if response else ''
         except G2Exception as err:
@@ -815,7 +815,7 @@ class G2CmdShell(cmd.Cmd):
 
         #--display the summary if no arguments
         if not arg:
-            
+
             auditCategories = []
             categoryOrder = {'MERGE': 0, 'SPLIT': 1, 'SPLIT+MERGE': 2}
             for category in sorted(self.auditData['AUDIT'].keys(), key=lambda x: categoryOrder[x] if x in categoryOrder else 9):
@@ -865,7 +865,7 @@ class G2CmdShell(cmd.Cmd):
             row.append('')
             row.append(colorize('New Negatives', categoryColors['SPLIT']))
             row.append(colorize(fmtStatistic(self.auditData['ACCURACY']['NEW_NEGATIVE']), None))
-            tblRows.append(row) 
+            tblRows.append(row)
 
             row = []
             row.append(auditCategories[0][0])
@@ -916,7 +916,7 @@ class G2CmdShell(cmd.Cmd):
 
         #--build complete report and save to a file
         elif arg.upper().startswith('SAVE'):
-            
+
             fileName = arg[7:].strip()
             fileHeaders = ['category', 'sub_category', 'audit_id']
             fileRows = []
@@ -1040,7 +1040,7 @@ class G2CmdShell(cmd.Cmd):
                     elif reply.upper().startswith('Q'): #--quit
                         break
 
-                    #--special actions 
+                    #--special actions
                     elif reply.upper().startswith('S'): #--scrolling view
                         self.do_scroll('')
                     elif reply.upper().startswith('W2'): #--why view
@@ -1051,7 +1051,7 @@ class G2CmdShell(cmd.Cmd):
                         fileName = None
                         if 'TO' in reply.upper():
                             fileName = reply[reply.upper().find('TO') + 2:].strip()
-                        else:                            
+                        else:
                             fileName = 'auditSample-%s.json' % sampleRecords[currentSample][0]['audit_id']
                             #--fileName = os.path.join(os.path.expanduser("~"), fileName)
                         self.do_export(','.join(exportRecords) + 'to ' + fileName)
@@ -1116,9 +1116,9 @@ class G2CmdShell(cmd.Cmd):
         for entityId in entityList:
             if entityId == 'unknown':  #--bypass missing
                 continue
-            try: 
+            try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -1129,7 +1129,7 @@ class G2CmdShell(cmd.Cmd):
             jsonData = json.loads(response)
 
             if debugOutput:
-                apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+                apiCall = f'getEntityByEntityID({entityId}, response, {getFlagBits})'
                 showApiDebug('auditResult', apiCall, getFlagList, jsonData)
 
             #--get the list of features for the entity
@@ -1223,7 +1223,7 @@ class G2CmdShell(cmd.Cmd):
                 columnValue = ''
                 if ftypeId in auditRecord['features']:
                     columnValue = '\n'.join([x['featDesc'] for x in auditRecord['features'][ftypeId]])
-                row.append(columnValue)                
+                row.append(columnValue)
 
             tblRows.append(row)
 
@@ -1251,11 +1251,11 @@ class G2CmdShell(cmd.Cmd):
 
         #--turn esb into a list of size groups if not previously calculated
         if type(self.snapshotData['ENTITY_SIZE_BREAKDOWN']) == dict:
-            response = input('\nPerform entity review, first? (yes/no) {note: this may take several minutes} ')            
+            response = input('\nPerform entity review, first? (yes/no) {note: this may take several minutes} ')
             reviewRequested = True if response.upper() in ('Y','YES') else False
             self.snapshotData['ENTITY_SIZE_BREAKDOWN'] = self.summarize_entitySizeBreakdown(self.snapshotData['ENTITY_SIZE_BREAKDOWN'], reviewRequested)
             if reviewRequested:
-                try: 
+                try:
                     with open(self.snapshotFile, 'w') as f:
                         json.dump(self.snapshotData, f)
                 except IOError as err:
@@ -1269,7 +1269,7 @@ class G2CmdShell(cmd.Cmd):
 
         #--display the summary if no arguments
         if not arg:
-            
+
             tblTitle = 'Entity Size Breakdown from %s' % self.snapshotFile
             tblColumns = []
             tblColumns.append({'name': 'Entity Size', 'width': 10, 'align': 'center'})
@@ -1316,7 +1316,7 @@ class G2CmdShell(cmd.Cmd):
             sampleRecords = []
             for entitySizeData in self.snapshotData['ENTITY_SIZE_BREAKDOWN']:
 
-                #--add these entities if they satisfy the entity size argument 
+                #--add these entities if they satisfy the entity size argument
                 if sign in ('=', '>=', '<=') and entitySizeData['ENTITY_SIZE'] == size:
                     theseRecords = entitySizeData['SAMPLE_ENTITIES']
                 elif sign in ('<', '<=') and entitySizeData['ENTITY_SIZE'] < size:
@@ -1332,7 +1332,7 @@ class G2CmdShell(cmd.Cmd):
                     for entityInfo in theseRecords:
                         if 'REVIEW_FEATURES' not in entityInfo:
                             continue
-                        if reviewFeatures: 
+                        if reviewFeatures:
                             reviewCriteriaNotMet = False
                             for ftypeCode in reviewFeatures:
                                 if ftypeCode not in entityInfo['REVIEW_FEATURES']:
@@ -1343,7 +1343,7 @@ class G2CmdShell(cmd.Cmd):
                         reviewRecords.append(entityInfo)
                     theseRecords = reviewRecords
 
-                sampleRecords.extend(theseRecords) 
+                sampleRecords.extend(theseRecords)
 
             if len(sampleRecords) == 0:
                 print('\nNo records found for entitySizeBreakdown %s, command syntax: %s \n' % (arg, '\n\n' + self.do_entitySizeBreakdown.__doc__[1:]))
@@ -1388,7 +1388,7 @@ class G2CmdShell(cmd.Cmd):
                         elif reply.upper().startswith('Q'): #--quit
                             break
 
-                        #--special actions 
+                        #--special actions
                         elif reply.upper().startswith('S'): #--scrolling view
                             self.do_scroll('')
                         elif reply.upper().startswith('D'): #--detail view
@@ -1401,7 +1401,7 @@ class G2CmdShell(cmd.Cmd):
                             fileName = None
                             if 'TO' in reply.upper():
                                 fileName = reply[reply.upper().find('TO') + 2:].strip()
-                            else:                            
+                            else:
                                 fileName = '%s.json' % '-'.join(exportRecords)
                                 #fileName = os.path.join(os.path.expanduser("~"), fileName)
                             self.do_export(','.join(exportRecords) + 'to ' + fileName)
@@ -1492,9 +1492,9 @@ class G2CmdShell(cmd.Cmd):
             maxAddrCnt = 25
 
         #--get the entity
-        try: 
+        try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), self.computeApiFlags(['G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES']), response)
+            retcode = g2Engine.getEntityByEntityID(int(entityID), response, self.computeApiFlags(['G2_ENTITY_INCLUDE_REPRESENTATIVE_FEATURES']))
             response = response.decode() if response else ''
         except G2Exception as err:
             print(str(err))
@@ -1536,12 +1536,12 @@ class G2CmdShell(cmd.Cmd):
             elif ftypeCode == 'ADDRESS' and distinctFeatureCount > maxAddrCnt:
                 needsReview = True
 
-            if needsReview: 
+            if needsReview:
                 reviewFeatures.append(ftypeCode)
 
         if reviewFeatures:
             featureInfo['REVIEW_FEATURES'] = reviewFeatures
- 
+
         return featureInfo
 
     # -----------------------------
@@ -1590,7 +1590,7 @@ class G2CmdShell(cmd.Cmd):
                     row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['POSSIBLY_RELATED_ENTITY_COUNT']) if 'POSSIBLY_RELATED_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
 
                 tblRows.append(row)
-            
+
             if not arg:
                 self.renderTable(tblTitle, tblColumns, tblRows)
             else:
@@ -1627,7 +1627,7 @@ class G2CmdShell(cmd.Cmd):
                 printWithNewLines('no entities to display!', 'B')
             else:
 
-                self.currentReviewList = 'DATA SOURCE SUMMARY FOR: %s (%s)' % (dataSource, matchLevelCode) 
+                self.currentReviewList = 'DATA SOURCE SUMMARY FOR: %s (%s)' % (dataSource, matchLevelCode)
                 currentSample = 0
                 while True:
                     if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
@@ -1653,7 +1653,7 @@ class G2CmdShell(cmd.Cmd):
                             reply = input('Select (P)revious, (N)ext, (S)croll, (D)etail, (W)hy, (E)xport, (Q)uit ...')
                         else:
                             reply = input('Select (P)revious, (N)ext, (S)croll, (W)hy, (E)xport, (Q)uit ...')
-          
+
                         if reply:
                             removeFromHistory()
                         else:
@@ -1676,7 +1676,7 @@ class G2CmdShell(cmd.Cmd):
                         elif reply.upper().startswith('Q'): #--quit
                             break
 
-                        #--special actions 
+                        #--special actions
                         elif reply.upper().startswith('S'): #--scrolling view
                             self.do_scroll('')
                         elif reply.upper().startswith('D') and matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'): #--detail view
@@ -1687,7 +1687,7 @@ class G2CmdShell(cmd.Cmd):
                             fileName = None
                             if 'TO' in reply.upper():
                                 fileName = reply[reply.upper().find('TO') + 2:].strip()
-                            else:                            
+                            else:
                                 fileName = '%s.json' % '-'.join(exportRecords)
                                 #fileName = os.path.join(os.path.expanduser("~"), fileName)
                             self.do_export(','.join(exportRecords) + 'to ' + fileName)
@@ -1725,7 +1725,7 @@ class G2CmdShell(cmd.Cmd):
         '\n\tcrossSourceSummary (with no parameters displays the overall stats)' \
         '\n\tcrossSourceSummary <dataSource1> (displays the cross matches for that data source only)' \
         '\n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships\n'
- 
+
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
             print('\nPlease load a json file created with G2Snapshot.py to use this command\n')
             return
@@ -1812,7 +1812,7 @@ class G2CmdShell(cmd.Cmd):
                 printWithNewLines('no entities to display!', 'B')
             else:
 
-                self.currentReviewList = 'CROSS SOURCE SUMMARY for: %s-%s  (%s)' % (dataSource1, dataSource2, matchLevelCode) 
+                self.currentReviewList = 'CROSS SOURCE SUMMARY for: %s-%s  (%s)' % (dataSource1, dataSource2, matchLevelCode)
                 currentSample = 0
                 while True:
 
@@ -1864,7 +1864,7 @@ class G2CmdShell(cmd.Cmd):
                         elif reply.upper().startswith('Q'): #--quit
                             break
 
-                        #--special actions 
+                        #--special actions
                         elif reply.upper().startswith('S'): #--scrolling view
                             self.do_scroll('')
                         elif reply.upper().startswith('D') and matchLevelCode in ('MATCH_SAMPLE'): #--detail view
@@ -1875,7 +1875,7 @@ class G2CmdShell(cmd.Cmd):
                             fileName = None
                             if 'TO' in reply.upper():
                                 fileName = reply[reply.upper().find('TO') + 2:].strip()
-                            else:                            
+                            else:
                                 fileName = '%s.json' % '-'.join(exportRecords)
                                 #fileName = os.path.join(os.path.expanduser("~"), fileName)
                             self.do_export(','.join(exportRecords) + 'to ' + fileName)
@@ -1949,9 +1949,9 @@ class G2CmdShell(cmd.Cmd):
                 searchFlagList.append('G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS')
             searchFlagBits = self.computeApiFlags(searchFlagList)
 
-            try: 
+            try:
                 response = bytearray()
-                retcode = g2Engine.searchByAttributesV2(json.dumps(searchJson), searchFlagBits, response)
+                retcode = g2Engine.searchByAttributes(json.dumps(searchJson), response, searchFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print(json.dumps(searchJson, indent=4))
@@ -1960,10 +1960,10 @@ class G2CmdShell(cmd.Cmd):
             jsonResponse = json.loads(response)
             if debugOutput:
                 showDebug('searchMessage', searchJson)
-                apiCall = f'searchByAttributesV2(searchMessage, {searchFlagBits}, response)'
+                apiCall = f'searchByAttributes(searchMessage, response, {searchFlagBits})'
                 showApiDebug('search', apiCall, searchFlagList, jsonResponse)
 
-                
+
             #--constants for descriptions and sort orders
             dataSourceOrder = [] #--place your data sources here!
 
@@ -2028,9 +2028,9 @@ class G2CmdShell(cmd.Cmd):
                         if featureCode == 'NAME':
                             if 'BT_FN' in scoreRecord:
                                 scoreCode = 'BT_FN'
-                            else: 
+                            else:
                                 scoreCode = 'GNR_FN'
-                        else: 
+                        else:
                             scoreCode = 'FULL_SCORE'
                         matchingScore= scoreRecord[scoreCode]
                         matchingValue = scoreRecord['CANDIDATE_FEAT']
@@ -2053,7 +2053,7 @@ class G2CmdShell(cmd.Cmd):
                     weightedScores[featureCode]['+weight'] = 100
                     weightedScores[featureCode]['-weight'] = 0
                     #if scoredFeatureCount > 1:
-                    
+
                 matchScore = 0
                 for featureCode in bestScores:
                     if featureCode in weightedScores:
@@ -2141,13 +2141,13 @@ class G2CmdShell(cmd.Cmd):
         if 'DETAIL ' in arg.upper():
             showDetail = True
             arg = arg.upper().replace('DETAIL ','')
-        else: 
+        else:
             showDetail = False
 
         if 'FEATURES ' in arg.upper():
             showFeatures = True
             arg = arg.upper().replace('FEATURES ','')
-        else: 
+        else:
             showFeatures = False
 
         if len(arg.split()) == 2 and arg.split()[0].upper() == 'SEARCH':
@@ -2174,20 +2174,20 @@ class G2CmdShell(cmd.Cmd):
         getFlagBits = self.computeApiFlags(getFlagList)
 
         if len(arg.split()) == 1:
-            apiCall = f'getEntityByEntityIDV2({arg}, {getFlagBits}, response)' 
-            try: 
+            apiCall = f'getEntityByEntityID({arg}, response, {getFlagBits})'
+            try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(arg), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(arg), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
                 return -1 if calledDirect else 0
 
         elif len(arg.split()) == 2:
-            apiCall = f'getEntityByRecordIDV2("{arg.split()[0]}", "{arg.split()[1]}", {getFlagBits}, response)'
-            try: 
+            apiCall = f'getEntityByRecordID("{arg.split()[0]}", "{arg.split()[1]}", response, {getFlagBits})'
+            try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByRecordIDV2(arg.split()[0], arg.split()[1], getFlagBits, response)
+                retcode = g2Engine.getEntityByRecordID(arg.split()[0], arg.split()[1], response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -2304,7 +2304,7 @@ class G2CmdShell(cmd.Cmd):
                 matchData['ruleCode'] = self.getRuleDesc(relationship['ERRULE_CODE'])
                 row.append(formatMatchData(matchData, self.colors))
                 relatedRecordList.append(row)
-                    
+
             self.renderTable(tblTitle, tblColumns, relatedRecordList, titleColor=self.colors['entityTitle'], titleJustify='l', displayFlag='end')
 
         return 0
@@ -2321,9 +2321,9 @@ class G2CmdShell(cmd.Cmd):
         phoneList = []
         otherList = []
         for record in [recordList] if type(recordList) != list else recordList:
- 
+
             #--should only ever be one data source in the list
-            dataSource = colorize(record['DATA_SOURCE'], self.colors['datasource']) 
+            dataSource = colorize(record['DATA_SOURCE'], self.colors['datasource'])
 
             recordIdData = record['RECORD_ID']
             if reportType == 'detail':
@@ -2383,10 +2383,10 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
         getFlagBits = self.computeApiFlags(getFlagList)
 
-        apiCall = f'getEntityByEntityIDV2({entityID}, {getFlagBits}, response)' 
-        try: 
+        apiCall = f'getEntityByEntityID({entityID}, response, {getFlagBits})'
+        try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityID), getFlagBits, response)
+            retcode = g2Engine.getEntityByEntityID(int(entityID), response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             printWithNewLines(str(err), 'B')
@@ -2413,8 +2413,8 @@ class G2CmdShell(cmd.Cmd):
             for distinctFeatureData in jsonData['RESOLVED_ENTITY']['FEATURES'].get(ftypeCode,[]):
                 for featureData in distinctFeatureData['FEAT_DESC_VALUES']:
                     usageType = featureData.get('USAGE_TYPE')
-                    orderedFeatureList.append({'ftypeCode': ftypeCode, 
-                                               'usageType': distinctFeatureData.get('USAGE_TYPE'), 
+                    orderedFeatureList.append({'ftypeCode': ftypeCode,
+                                               'usageType': distinctFeatureData.get('USAGE_TYPE'),
                                                'featureDesc': featureData.get('FEAT_DESC'),
                                                'libFeatId': featureData['LIB_FEAT_ID']})
         tblRows = []
@@ -2424,8 +2424,8 @@ class G2CmdShell(cmd.Cmd):
             libFeatId = libFeatData['libFeatId']
             featureDesc = libFeatData['featureDesc']
 
-            try: 
-                response = bytearray() 
+            try:
+                response = bytearray()
                 g2_diagnostic_module.getFeature(libFeatId, response)
                 response = response.decode() if response else ''
             except G2Exception as err:
@@ -2463,16 +2463,16 @@ class G2CmdShell(cmd.Cmd):
             getFlagList.append('G2_ENTITY_SHOW_FEATURES_STATS')
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
         getFlagBits = self.computeApiFlags(getFlagList)
-        try: 
+        try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+            retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print(str(err))
             return None
         jsonData2 = json.loads(response)
         if debugOutput:
-            apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+            apiCall = f'getEntityByEntityID({entityId}, response, {getFlagBits})'
             showApiDebug('getAmbiguousEntitySet', apiCall, getFlagList, jsonData2)
 
         ambiguousEntity = 'AMBIGUOUS_ENTITY' in jsonData2['RESOLVED_ENTITY']['FEATURES']
@@ -2519,18 +2519,18 @@ class G2CmdShell(cmd.Cmd):
             else:
                 entityList = self.lastSearchResult
         else:
-            try: 
+            try:
                 if ',' in arg:
                     entityList = list(map(int, arg.split(',')))
                 else:
                     entityList = list(map(int, arg.split()))
             except:
-                printWithNewLines('error parsing argument [%s] into entity id numbers' % arg, 'S') 
-                printWithNewLines('  expected comma or space delimited integers', 'E') 
+                printWithNewLines('error parsing argument [%s] into entity id numbers' % arg, 'S')
+                printWithNewLines('  expected comma or space delimited integers', 'E')
                 return -1 if calledDirect else 0
 
         if len(entityList) == 0:
-            printWithNewLines('%s contains no valid entities' % arg, 'B') 
+            printWithNewLines('%s contains no valid entities' % arg, 'B')
             return -1 if calledDirect else 0
 
         getFlagList = []
@@ -2552,7 +2552,7 @@ class G2CmdShell(cmd.Cmd):
         for entityId in entityList:
             try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -2564,7 +2564,7 @@ class G2CmdShell(cmd.Cmd):
 
             jsonData = json.loads(response)
             if debugOutput:
-                apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+                apiCall = f'getEntityByEntityID({entityId}, response, {getFlagBits})'
                 showApiDebug('compare', apiCall, getFlagList, jsonData)
 
             entityData = {}
@@ -2579,7 +2579,7 @@ class G2CmdShell(cmd.Cmd):
             entityData['otherData'] = []
             entityData['crossRelations'] = []
             entityData['otherRelations'] = []
- 
+
             additionalDataSources = False
             for record in jsonData['RESOLVED_ENTITY']['RECORDS']:
 
@@ -2758,7 +2758,7 @@ class G2CmdShell(cmd.Cmd):
            tblRows.append([rowTitles['crossRelsRow']] + crossRelsRow)
         if len(''.join(commonRelsRow)) > 0:
             tblRows.append([rowTitles['commonRelsRow']] + commonRelsRow)
-        
+
         self.renderTable(tblTitle, tblColumns, tblRows, headerColor=self.colors['entityColumns'])
 
         return 0
@@ -2790,17 +2790,17 @@ class G2CmdShell(cmd.Cmd):
         maxDegree = 0  #--really only used for entity paths
         maxEntities = 10000 #--for safety
 
-        getFlagList = []    
+        getFlagList = []
         getFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
         getFlagList.append('G2_ENTITY_INCLUDE_RECORD_SUMMARY')
         getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
         getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
         getFlagBits = self.computeApiFlags(getFlagList)
 
-        apiCall = f'findNetworkByEntityIDV2({entityParameter} {maxDegree} {buildOutDegree} {maxEntities} {getFlagBits})'
-        try: 
+        apiCall = f'findNetworkByEntityID({entityParameter} {maxDegree} {buildOutDegree} {maxEntities} {getFlagBits})'
+        try:
             response = bytearray()
-            retcode = g2Engine.findNetworkByEntityIDV2(entityParameter, maxDegree, buildOutDegree, maxEntities, getFlagBits, response)
+            retcode = g2Engine.findNetworkByEntityID(entityParameter, maxDegree, buildOutDegree, maxEntities, response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print(f'\n{err}\n')
@@ -2824,7 +2824,7 @@ class G2CmdShell(cmd.Cmd):
             #--get next related entity
             entity_id = current_parent_data['RELATED_ENTITY_LIST'][current_parent_data['NEXT_RELATED_ENTITY_I']]
             current_parent_list[len(current_parent_list)-1]['NEXT_RELATED_ENTITY_I'] += 1
-            
+
             #--bypass if already built
             #if entity_id in nodes:
             #    continue
@@ -2881,7 +2881,7 @@ class G2CmdShell(cmd.Cmd):
                 for parent_data in current_parent_list:
                     next_prior_entity_list += parent_data['RELATED_ENTITY_LIST']
 
-                current_parent_list.append({'NEXT_RELATED_ENTITY_I': 0, 
+                current_parent_list.append({'NEXT_RELATED_ENTITY_I': 0,
                                             'RELATED_ENTITY_LIST': nodes[entity_id]['RELATED_ENTITY_LIST'],
                                             'PRIOR_ENTITY_LIST': next_prior_entity_list})
 
@@ -2903,7 +2903,7 @@ class G2CmdShell(cmd.Cmd):
                 entity_id = current_degree_list[-1]['entity_id']
                 related_ids_to_build = []
 
-                for relation_fields in [['DISCLOSED', 'DISCLOSED_RELATION_COUNT', 'DISCLOSED_RELATION_CATEGORIES'], 
+                for relation_fields in [['DISCLOSED', 'DISCLOSED_RELATION_COUNT', 'DISCLOSED_RELATION_CATEGORIES'],
                                         ['DERIVED', 'DERIVED_RELATION_COUNT', 'DERIVED_RELATION_CATEGORIES']]:
 
                     class_name = relation_fields[0]
@@ -2991,26 +2991,26 @@ class G2CmdShell(cmd.Cmd):
     def categorizeMatchkey(self, match_key):
         # match_key example:
         #  'SAYARI(FATHER,SPOUSE:SON,SPOUSE)+ADDRESS+PHONE-DOB'
-        disclosed_keys = [] 
+        disclosed_keys = []
         derived_keys = []
         key_list = re.split('(\+|\-)', match_key)
 
         i = 1
         while i < len(key_list):
             # ignore the minuses
-            if key_list[i] in ('+'): 
+            if key_list[i] in ('+'):
                 i += 1
                 this_key = key_list[i]
                 # derived
-                if '(' not in this_key: 
+                if '(' not in this_key:
                     derived_keys.append(this_key)
                 # disclosed
-                else: 
+                else:
                     both_side_roles = this_key[this_key.find('(')+1:this_key.find(')')].split(':')
                     # left side of colon is from this entity's point of view
                     # but if blank, must use right side as both sides not required
                     roles_to_use = both_side_roles[0] if both_side_roles[0] else both_side_roles[1]
-                    disclosed_keys += roles_to_use.split(',') 
+                    disclosed_keys += roles_to_use.split(',')
             i += 1
 
         return disclosed_keys, derived_keys
@@ -3035,7 +3035,7 @@ class G2CmdShell(cmd.Cmd):
         '\n\t[!] indicates that this value was not not even scored as way too many entities share it' \
         '\n\t[#] indicates that this value was suppressed in favor of a more complete value\n'
         if type(arg) != list and not argCheck('do_why', arg, self.do_why.__doc__):
-            return 
+            return
 
         #--no return code if called direct
         calledFrom = sys._getframe().f_back.f_code.co_name
@@ -3062,14 +3062,14 @@ class G2CmdShell(cmd.Cmd):
                 else:
                     entityList = self.lastSearchResult
             else:
-                try: 
+                try:
                     if ',' in arg:
                         entityList = arg.split(',')
                     else:
                         entityList = arg.split()
                 except:
-                    printWithNewLines('error parsing argument [%s] into entity id numbers' % arg, 'S') 
-                    printWithNewLines('  expected comma or space delimited integers', 'E') 
+                    printWithNewLines('error parsing argument [%s] into entity id numbers' % arg, 'S')
+                    printWithNewLines('  expected comma or space delimited integers', 'E')
                     return -1 if calledDirect else 0
 
         if len(entityList) == 1:
@@ -3185,7 +3185,7 @@ class G2CmdShell(cmd.Cmd):
         whyFlagBits = self.computeApiFlags(whyFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.whyEntityByEntityIDV2(int(entityList[0]), whyFlagBits, response)
+            retcode = g2Engine.whyEntityByEntityID(int(entityList[0]), response, whyFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3194,7 +3194,7 @@ class G2CmdShell(cmd.Cmd):
             return None
         jsonData = json.loads(response)
         if debugOutput:
-            apiCall = f'whyEntityByEntityIDV2({entityList[0]}, {whyFlagBits}, response)'
+            apiCall = f'whyEntityByEntityID({entityList[0]}, response, {whyFlagBits})'
             showApiDebug('whyEntity', apiCall, whyFlagList, jsonData)
 
         entityData = {}
@@ -3208,7 +3208,7 @@ class G2CmdShell(cmd.Cmd):
             features = self.whyGetFeatures(jsonData, entityId, internalId)
             if 'MATCH_INFO' not in whyResult:
                 whyKey = None
-            else: 
+            else:
                 whyKey, features = self.whyAddMatchInfo(features, whyResult['MATCH_INFO'])
 
             entityData[thisId]['dataSources'] = records
@@ -3223,16 +3223,16 @@ class G2CmdShell(cmd.Cmd):
         whyFlagBits = self.computeApiFlags(whyFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.whyRecordsV2(entityList[0], entityList[1], entityList[2], entityList[3], whyFlagBits, response)
+            retcode = g2Engine.whyRecords(entityList[0], entityList[1], entityList[2], entityList[3], response, whyFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
-            return None 
+            return None
         if len(response) == 0:
-            return None 
+            return None
         jsonData = json.loads(response)
         if debugOutput:
-            apiCall = f'whyRecordsV2("{entityList[0]}", "{entityList[1]}", "{entityList[2]}", "{entityList[3]}", {whyFlagBits}, response)'
+            apiCall = f'whyRecords("{entityList[0]}", "{entityList[1]}", "{entityList[2]}", "{entityList[3]}", response, {whyFlagBits})'
             showApiDebug('whyEntity', apiCall, whyFlagList, jsonData)
 
         entityData = {}
@@ -3248,7 +3248,7 @@ class G2CmdShell(cmd.Cmd):
             features = self.whyGetFeatures(jsonData, entityId, internalId)
             if 'MATCH_INFO' not in whyResult:
                 whyKey = None
-            else: 
+            else:
                 whyKey, features = self.whyAddMatchInfo(features, whyResult['MATCH_INFO'])
 
             entityData[thisId]['dataSources'] = records
@@ -3265,7 +3265,7 @@ class G2CmdShell(cmd.Cmd):
             features = self.whyGetFeatures(jsonData, entityId, internalId)
             if 'MATCH_INFO' not in whyResult:
                 whyKey = None
-            else: 
+            else:
                 whyKey, features = self.whyAddMatchInfo(features, whyResult['MATCH_INFO'])
 
             entityData[thisId]['dataSources'] = records
@@ -3280,7 +3280,7 @@ class G2CmdShell(cmd.Cmd):
     def whyNot2(self, entityList):
 
         try: entityList = [int(x) for x in entityList]
-        except: 
+        except:
             printWithNewLines('Invalid parameters')
             return None
 
@@ -3288,16 +3288,16 @@ class G2CmdShell(cmd.Cmd):
         whyFlagBits = self.computeApiFlags(whyFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.whyEntitiesV2(int(entityList[0]), int(entityList[1]), whyFlagBits, response)
+            retcode = g2Engine.whyEntities(int(entityList[0]), int(entityList[1]), response, whyFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
-            return None 
+            return None
         if len(response) == 0:
-            return None 
+            return None
         jsonData = json.loads(response)
         if debugOutput:
-            apiCall = f'whyEntitiesV2({entityList[0]}, {entityList[1]}, {whyFlagBits}, response)'
+            apiCall = f'whyEntities({entityList[0]}, {entityList[1]}, response, {whyFlagBits})'
             showApiDebug('basic whyNot (between 2 entities)', apiCall, whyFlagList, jsonData)
 
         entityData = {}
@@ -3312,7 +3312,7 @@ class G2CmdShell(cmd.Cmd):
                         break
                 if not bestEntity:
                     print('\nInternal error: resolved entity %s missing!\n' % thisId)
-                    return None 
+                    return None
 
                 records = self.whyFmtRecordList(bestEntity['RESOLVED_ENTITY']['RECORDS'])
                 features = {}
@@ -3334,7 +3334,7 @@ class G2CmdShell(cmd.Cmd):
 
                 if 'MATCH_INFO' not in whyResult:
                     whyKey = None
-                else: 
+                else:
                     whyKey, features = self.whyAddMatchInfo(features, whyResult['MATCH_INFO'])
 
                 entityData[thisId]['dataSources'] = records
@@ -3358,7 +3358,7 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def whyNotMany(self, entityList):
         try: entityList = [int(x) for x in entityList]
-        except: 
+        except:
             printWithNewLines('Invalid parameters')
             return None
 
@@ -3377,7 +3377,7 @@ class G2CmdShell(cmd.Cmd):
             entityData[entityId] = {}
             try:
                 response = bytearray()
-                retcode = g2Engine.whyEntityByEntityIDV2(int(entityId), whyFlagBits, response)
+                retcode = g2Engine.whyEntityByEntityID(int(entityId), response, whyFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print('\n' + str(err) + '\n')
@@ -3387,7 +3387,7 @@ class G2CmdShell(cmd.Cmd):
                 printWithNewLines('No records found for %s' % entityId, 'B')
                 return None
             if debugOutput:
-                apiCall = f'whyEntityByEntityIDV2({entityId}, {whyFlagBits}, response)'
+                apiCall = f'whyEntityByEntityID({entityId}, response, {whyFlagBits})'
                 showApiDebug('advanced whyNot - step 1 (get features and usage stats) ', apiCall, whyFlagList, jsonData)
 
             #--add the data sources and create search json
@@ -3439,16 +3439,16 @@ class G2CmdShell(cmd.Cmd):
             else:
                 getFlagList.append('G2_ENTITY_BRIEF_FORMAT')
             getFlagBits = self.computeApiFlags(getFlagList)
-            try: 
+            try:
                 response = bytearray()
-                retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print(str(err))
                 return
             jsonData2 = json.loads(response)
             if debugOutput:
-                apiCall = f'getEntityByEntityIDV2({entityId}, {getFlagBits}, response)'
+                apiCall = f'getEntityByEntityID({entityId}}, response, {getFlagBits)'
                 showApiDebug('advanced whyNot - step 2 (get actual relationships)', apiCall, getFlagList, jsonData2)
 
             entityData[entityId]['crossRelations'] = []
@@ -3472,9 +3472,9 @@ class G2CmdShell(cmd.Cmd):
                 searchFlagList.append('G2_ENTITY_INCLUDE_NO_RELATIONS')
             searchFlagBits = self.computeApiFlags(searchFlagList)
 
-            try: 
+            try:
                 response = bytearray()
-                retcode = g2Engine.searchByAttributesV2(json.dumps(searchJson), searchFlagBits, response)
+                retcode = g2Engine.searchByAttributes(json.dumps(searchJson), response, searchFlagBits)
                 response = response.decode() if response else ''
             except G2Exception as err:
                 print(json.dumps(searchJson, indent=4))
@@ -3483,7 +3483,7 @@ class G2CmdShell(cmd.Cmd):
             jsonData2 = json.loads(response)
             if debugOutput:
                 showDebug('searchMessage', searchJson)
-                apiCall = f'searchByAttributesV2(searchMessage, {searchFlagBits}, response)'
+                apiCall = f'searchByAttributes(searchMessage, response, {searchFlagBits})'
                 showApiDebug('advanced whyNot - step 3 (search to see if it can find the others)', apiCall, searchFlagList, jsonData2)
 
             entityData[entityId]['whyKey'] = []
@@ -3492,7 +3492,7 @@ class G2CmdShell(cmd.Cmd):
                  resolvedEntityMatchInfo = resolvedEntityBase['MATCH_INFO']
                  if resolvedEntity['ENTITY_ID'] in entityList and resolvedEntity['ENTITY_ID'] != entityId:
                     whyKey = {}
-                    whyKey['matchKey'] = resolvedEntityMatchInfo['MATCH_KEY'] 
+                    whyKey['matchKey'] = resolvedEntityMatchInfo['MATCH_KEY']
                     whyKey['ruleCode'] = self.getRuleDesc(resolvedEntityMatchInfo['ERRULE_CODE'])
                     whyKey['entityId'] = resolvedEntity['ENTITY_ID']
                     entityData[entityId]['whyKey'].append(whyKey)
@@ -3551,7 +3551,7 @@ class G2CmdShell(cmd.Cmd):
                                         cfrtnRecord = self.cfrtnLookup[self.cfuncLookup[self.scoredFtypeCodes[featureCode]['CFUNC_ID']]['CFUNC_ID']]
                                         if matchScore >= cfrtnRecord['CLOSE_SCORE']:
                                             matchLevel = 'CLOSE'
-                                
+
                                 if 'matchScore' not in entityData[entityId]['features'][libFeatId] or matchScore > entityData[entityId]['features'][libFeatId]['matchScore']:
                                     entityData[entityId]['features'][libFeatId]['wasScored'] = 'Yes'
                                     entityData[entityId]['features'][libFeatId]['matchedFeatId'] = 0
@@ -3616,7 +3616,7 @@ class G2CmdShell(cmd.Cmd):
         if 'wasScored' in featureData:
             if featureData['matchLevel'] in ('SAME', 'CLOSE'):
                 featureData['sortOrder'] = 1
-                featureData['featColor'] = self.colors['good'] 
+                featureData['featColor'] = self.colors['good']
             else:
                 featureData['sortOrder'] = 2
                 if not whyKey:
@@ -3627,13 +3627,13 @@ class G2CmdShell(cmd.Cmd):
                     featureData['featColor'] = self.colors['caution']
                 else:
                     featureData['featColor'] = self.colors['bad']
-            #if dimmit: 
+            #if dimmit:
             #    featureData['featColor'] += ',dim'
             featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], featureData['featColor'])
             featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
 
             #--note: addresses may score same tho not exact!
-            if featureData['matchLevel'] != 'SAME' or featureData['matchedFeatDesc'] != featureData['featDesc']:  
+            if featureData['matchLevel'] != 'SAME' or featureData['matchedFeatDesc'] != featureData['featDesc']:
                 featureData['formattedFeatDesc'] += '\n  '
                 featureData['formattedFeatDesc'] += colorize('%s (%s)' % (featureData['matchedFeatDesc'].strip(), featureData['matchScoreDisplay']), featureData['featColor'] + ',italics')
             featureData['formattedFeatDesc2'] = colorize('%s (%s)' % (featureData['matchedFeatDesc'].strip(), featureData['matchScoreDisplay']), featureData['featColor'])
@@ -3650,8 +3650,8 @@ class G2CmdShell(cmd.Cmd):
                 featureData['formattedFeatDesc']  = colorize(featDesc, self.colors['bad'])
             featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
 
-        #--sort rejected matches lower 
-        if dimmit: 
+        #--sort rejected matches lower
+        if dimmit:
             featureData['sortOrder'] += .5
 
         return featureData
@@ -3702,7 +3702,7 @@ class G2CmdShell(cmd.Cmd):
                         features[libFeatId]['ftypeId'] = self.ftypeCodeLookup[ftypeCode]['FTYPE_ID']
                         features[libFeatId]['ftypeCode'] = ftypeCode
                         #--disabled here in favor of the record level usage type
-                        #features[libFeatId]['usageType'] = distinctFeatureRecord.get('USAGE_TYPE','') 
+                        #features[libFeatId]['usageType'] = distinctFeatureRecord.get('USAGE_TYPE','')
                         features[libFeatId]['featDesc'] = featRecord['FEAT_DESC']
                         features[libFeatId]['isCandidate'] = featRecord['USED_FOR_CAND']
                         features[libFeatId]['isScored'] = featRecord['USED_FOR_SCORING']
@@ -3740,7 +3740,7 @@ class G2CmdShell(cmd.Cmd):
             ftypeId = self.ftypeCodeLookup[ftypeCode]['FTYPE_ID']
             bestScoreRecord = {}
             for featRecord in matchInfo['FEATURE_SCORES'][ftypeCode]:
-                #--BUG WHERE INBOUND/CANDIDATE IS SOMETIMES REVERSED...  
+                #--BUG WHERE INBOUND/CANDIDATE IS SOMETIMES REVERSED...
                 if featRecord['INBOUND_FEAT_ID'] in features:
                     libFeatId = featRecord['INBOUND_FEAT_ID']
                     libFeatDesc = featRecord['INBOUND_FEAT']
@@ -3755,7 +3755,7 @@ class G2CmdShell(cmd.Cmd):
                     matchedFeatDesc = featRecord['INBOUND_FEAT']
                 else:
                     print('warning: scored feature %s not in either record!' % libFeatId)
-                    continue   
+                    continue
 
                 featRecord = self.whySetMatchScore(featRecord)
                 matchScore = featRecord['MATCH_SCORE']
@@ -3786,7 +3786,7 @@ class G2CmdShell(cmd.Cmd):
                 features[libFeatId]['matchedFeatId'] = bestScoreRecord['matchedFeatId']
                 features[libFeatId]['matchedFeatDesc'] = bestScoreRecord['matchedFeatDesc']
                 features[libFeatId]['featBehavior'] = bestScoreRecord['featBehavior']
- 
+
         return whyKey, features
 
     # -----------------------------
@@ -3828,13 +3828,13 @@ class G2CmdShell(cmd.Cmd):
                 how {entity_id} formatted     (shows the matching features in a table)
 
             {colorize('How to read:', self.colors['highlight1'])}
-                A how report documents each step of the resoution process for an entity so if 
-                an entity has 100s records there will be 100s of steps. Each step will either 
-                create a virtual entity, add to it or combine it with other virtual entities 
-                that were created gotten created along the way.  
+                A how report documents each step of the resoution process for an entity so if
+                an entity has 100s records there will be 100s of steps. Each step will either
+                create a virtual entity, add to it or combine it with other virtual entities
+                that were created gotten created along the way.
 
-                For instance, there may be a set of records (a virtual entity) that match on name 
-                and address and another set that match on name and phone before a record with the 
+                For instance, there may be a set of records (a virtual entity) that match on name
+                and address and another set that match on name and phone before a record with the
                 same name, address and phone combines the two virtual entities into one!
 
             {colorize('Pro tip!', self.colors['good'])}
@@ -3842,8 +3842,8 @@ class G2CmdShell(cmd.Cmd):
                 can search for in the concise or formatted view.  You can search for ...
                     - a particular step number such as step "2"
                     - a virtual entity_id such as {colorize('V123-S2', self.colors['entityid'] + ',dim')}
-                        {colorize('(the -S number after the virtual entity ID is the step number that updated it.  Try', 'italics')} 
-                            {colorize('searching for just the V number before the dash to find all steps that include it.)', 'italics')} 
+                        {colorize('(the -S number after the virtual entity ID is the step number that updated it.  Try', 'italics')}
+                            {colorize('searching for just the V number before the dash to find all steps that include it.)', 'italics')}
                     - any other string such as a match_key, principle code, specific name, address, etc
 
              '''))
@@ -3868,7 +3868,7 @@ class G2CmdShell(cmd.Cmd):
                 how_display_level = level
                 arg = arg.replace(level,'').strip()
 
-        try: 
+        try:
             entity_id = int(arg)
         except:
             print(f'\n invalid syntax: {arg} \n')
@@ -3882,10 +3882,10 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_OPTION_INCLUDE_FEATURE_STATS')
         getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS')
         getFlagBits = self.computeApiFlags(getFlagList)
-        apiCall = f'getEntityByEntityIDV2({entity_id}, {getFlagBits}, response)' 
-        try: 
+        apiCall = f'getEntityByEntityID({entity_id}, response, {getFlagBits})'
+        try:
             response = bytearray()
-            retcode = g2Engine.getEntityByEntityIDV2(entity_id, getFlagBits, response)
+            retcode = g2Engine.getEntityByEntityID(entity_id, response, getFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3893,7 +3893,7 @@ class G2CmdShell(cmd.Cmd):
         json_data = json.loads(response)
         if debugOutput:
             showApiDebug('get', apiCall, getFlagList, json_data if response else '{}')
-        getEntityData = json_data 
+        getEntityData = json_data
 
         stat_pack = {'steps': {}, 'features': {}, 'rules': {}, 'ftype_counter': {}, 'rule_counter': {}}
 
@@ -3924,7 +3924,7 @@ class G2CmdShell(cmd.Cmd):
                     stat_pack['ftype_counter'][ftype_id]['scoringCapReached'] = 0
                     stat_pack['ftype_counter'][ftype_id]['scoringWasSuppressed'] = 0
                 if feat_desc not in stat_pack['features'][ftype_id]:
-                    total_feature_count += 1 
+                    total_feature_count += 1
                     stat_pack['features'][ftype_id][feat_desc] = 1
                     stat_pack['ftype_counter'][ftype_id]['featureCount'] += 1
                     for threshold in ['candidateCapReached','scoringCapReached','scoringWasSuppressed']:
@@ -3937,7 +3937,7 @@ class G2CmdShell(cmd.Cmd):
         howFlagBits = self.computeApiFlags(howFlagList)
         try:
             response = bytearray()
-            retcode = g2Engine.howEntityByEntityIDV2(entity_id, howFlagBits, response)
+            retcode = g2Engine.howEntityByEntityID(entity_id, response, howFlagBits)
             response = response.decode() if response else ''
         except G2Exception as err:
             print('\n' + str(err) + '\n')
@@ -3946,7 +3946,7 @@ class G2CmdShell(cmd.Cmd):
             return -1 if calledDirect else 0
         json_data = json.loads(response)
         if debugOutput:
-            apiCall = f'howEntityByEntityIDV2({entity_id}, {howFlagBits}, response)'
+            apiCall = f'howEntityByEntityID({entity_id}, response, {howFlagBits})'
             showApiDebug('howEntity', apiCall, howFlagList, json_data)
 
         entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
@@ -3988,7 +3988,7 @@ class G2CmdShell(cmd.Cmd):
             elif len(step_data['aggregate_nodes']) == 2:
                 step_data['step_type'] = 'Combine virtual entities'
                 lowest_member_count = step_data['VIRTUAL_ENTITY_1']['member_count'] if step_data['VIRTUAL_ENTITY_1']['member_count'] < step_data['VIRTUAL_ENTITY_2']['member_count'] else step_data['VIRTUAL_ENTITY_2']['member_count']
-                total_member_count = step_data['VIRTUAL_ENTITY_1']['member_count'] + step_data['VIRTUAL_ENTITY_2']['member_count'] 
+                total_member_count = step_data['VIRTUAL_ENTITY_1']['member_count'] + step_data['VIRTUAL_ENTITY_2']['member_count']
                 if lowest_member_count not in stat_pack['largest_combine_steps']:
                     stat_pack['largest_combine_steps'][lowest_member_count] = [[step_num, total_member_count]]
                 else:
@@ -4013,7 +4013,7 @@ class G2CmdShell(cmd.Cmd):
                 stat_pack['rule_counter'][formatted_errule_code] += 1
             if formatted_match_key not in stat_pack['rules'][formatted_errule_code]:
                 stat_pack['rules'][formatted_errule_code][formatted_match_key] = 1
-            else: 
+            else:
                 stat_pack['rules'][formatted_errule_code][formatted_match_key] += 1
 
             #--format the features and find the lowest scoring
@@ -4052,7 +4052,7 @@ class G2CmdShell(cmd.Cmd):
                     #input('wait')
                 aggregate_nodes[new_virtual_id] = {'final_step': step_num, 'all_steps': []}
 
-        #--start from the end and combine the prior steps that just add another singleton 
+        #--start from the end and combine the prior steps that just add another singleton
         render_node_list = []
         if json_data['HOW_RESULTS']['RESOLUTION_STEPS']: #--bypass if no resolution steps taken
             for final_virtual_data in json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']:
@@ -4068,7 +4068,7 @@ class G2CmdShell(cmd.Cmd):
                     while True:
                         prior_step = aggregate_nodes[aggregate_node_id]['final_step']
                         aggregate_nodes[current_node_id]['all_steps'].append(prior_step)
-                        if len(resolution_steps[prior_step]['aggregate_nodes']) == 1: 
+                        if len(resolution_steps[prior_step]['aggregate_nodes']) == 1:
                             aggregate_node_id = resolution_steps[prior_step]['aggregate_nodes'][0]
                         else:
                             break
@@ -4160,7 +4160,7 @@ class G2CmdShell(cmd.Cmd):
         category_node.node_desc = colorize('ENTITY SUMMARY', self.colors['highlight1'])
         summary_node.add_child(category_node)
 
-        for stat_data in [['Total record count', total_record_count], 
+        for stat_data in [['Total record count', total_record_count],
                           ['Total feature count', total_feature_count]]:
             item_node = Node(stat_data[0])
             item_node.node_desc= self.how_format_statistic(stat_data[0], stat_data[1])
@@ -4196,7 +4196,7 @@ class G2CmdShell(cmd.Cmd):
                 render_node_id = render_node_data['node_id']
                 parent_node_id = render_node_data['parent_node']
 
-                #--describe the node 
+                #--describe the node
                 colored_node_id = colorize(render_node_id, self.colors['entityid'])
                 if parent_node_id == 'root':
                     num_final_nodes = len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES'])
@@ -4256,7 +4256,7 @@ class G2CmdShell(cmd.Cmd):
 
                     #--gather the features to display by type for each side
                     features_by_type = {}
-                    for side_data in [['left', left_features, right_features, best_left_record_key, best_right_record_key], 
+                    for side_data in [['left', left_features, right_features, best_left_record_key, best_right_record_key],
                                       ['right', right_features, left_features, best_right_record_key, best_left_record_key]]:
                         side = side_data[0]
                         features1 = side_data[1]
@@ -4276,7 +4276,7 @@ class G2CmdShell(cmd.Cmd):
                             if matched_feat_id:
                                 if best_record_key1 in features1[lib_feat_id]['record_list']:
                                     feature_data['record_key1'] = best_record_key1
-                                else: 
+                                else:
                                     feature_data['record_key1'] = features1[lib_feat_id]['record_list'][0]
 
                                 if matched_feat_id not in features2:
@@ -4284,7 +4284,7 @@ class G2CmdShell(cmd.Cmd):
                                 else:
                                     if best_record_key2 in features2[matched_feat_id]['record_list']:
                                         feature_data['record_key2'] = best_record_key2
-                                    else: 
+                                    else:
                                         feature_data['record_key2'] = features2[matched_feat_id]['record_list'][0]
 
                             #--skip unmatched if not showing full detail
@@ -4325,7 +4325,7 @@ class G2CmdShell(cmd.Cmd):
 
                         row_title = colorize('DATA_SOURCES', self.colors['rowtitle'])
                         tblRow = [row_title]
-                        for virtual_entity_data in [[left_virtual_entity, best_left_record_key], 
+                        for virtual_entity_data in [[left_virtual_entity, best_left_record_key],
                                                     [right_virtual_entity, best_right_record_key]]:
                             virtual_entity = virtual_entity_data[0]
                             best_record_key = virtual_entity_data[1]
@@ -4358,7 +4358,7 @@ class G2CmdShell(cmd.Cmd):
                                 if feature_data.get('wasScored'):
                                     feature_score = '\n'.join(colorize(item, feature_data['featColor']) for item in feature_data['matchScoreDisplay'].split('|'))
 
-                                    feature_desc1 = feature_data['formattedFeatDesc1'] 
+                                    feature_desc1 = feature_data['formattedFeatDesc1']
                                     if step_data[left_virtual_entity]['node_type'] != 'singleton':
                                         from_desc = 'from: ' + colorize(': '.join(feature_data['record_key1'].split(self.dsrc_record_sep)), self.colors['datasource'])
                                         if feature_data['record_key1'] == best_left_record_key:
@@ -4369,13 +4369,13 @@ class G2CmdShell(cmd.Cmd):
                                         feature_desc2 = colorize(f"Internal error: {feature_data['matchedFeatId']} missing from {colored_virtual_id2}", self.colors['bad'])
                                         #input(feature_desc2 + ', press any key')
                                     else:
-                                        feature_desc2 = scored_right[feature_data['matchedFeatId']]['formattedFeatDesc1'] 
+                                        feature_desc2 = scored_right[feature_data['matchedFeatId']]['formattedFeatDesc1']
                                     if step_data[right_virtual_entity]['node_type'] != 'singleton':
                                         from_desc = 'from: ' + colorize(': '.join(feature_data['record_key2'].split(self.dsrc_record_sep)), self.colors['datasource'])
                                         if feature_data['record_key2'] == best_right_record_key:
                                             from_desc = colorize(from_desc, 'dim')
                                         feature_desc2 += '\n ' + from_desc
-                     
+
                                     tblRows.append([colored_ftype_code, feature_desc1, feature_score, feature_desc2])
                                 else:
                                     unscored_left.append(feature_data['formattedFeatDesc1'])
@@ -4433,9 +4433,9 @@ class G2CmdShell(cmd.Cmd):
             else:
                 continue
 
-            if reply.upper() in ('Q', 'QUIT'): 
+            if reply.upper() in ('Q', 'QUIT'):
                 break
-            elif reply.upper() == ('O'): 
+            elif reply.upper() == ('O'):
                 how_display_level = 'overview'
             elif reply.upper() == ('C'):
                 how_display_level = 'concise'
@@ -4453,12 +4453,12 @@ class G2CmdShell(cmd.Cmd):
             elif len(reply) > 1:
                 filter_str = reply
 
-            #--check if they entered a valid step number 
+            #--check if they entered a valid step number
             if filter_str and filter_str.isnumeric():
                 filter_str = f"Step {filter_str}"
                 if filter_str not in tree_nodes:
                     input(f"\nStep {filter_str} not found, press any key")
-                    filter_str = None  
+                    filter_str = None
 
             #--check if they entered a node_id
             if filter_str and filter_str in tree_nodes:
@@ -4511,7 +4511,7 @@ class G2CmdShell(cmd.Cmd):
             virtual_entity_data['node_type'] = 'singleton'
             record = raw_virtual_entity_data['MEMBER_RECORDS'][0]['RECORDS'][0]
             virtual_entity_data['node_desc'] = record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note
-            virtual_entity_data['colored_desc'] = colorize(record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note, self.colors['datasource']) 
+            virtual_entity_data['colored_desc'] = colorize(record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note, self.colors['datasource'])
 
         else:
             virtual_entity_data['node_type'] = 'aggregate'
@@ -4531,7 +4531,7 @@ class G2CmdShell(cmd.Cmd):
         return stat + ' ' + colorize('(' + str(cnt) + ')', self.colors['highlight2'])
 
     # -----------------------------
-    def do_score(self, arg): 
+    def do_score(self, arg):
         '\nCompares any two features and shows the scores returned.\n' \
         '\nSyntax:' \
         '\n\tscore [{"name_last": "Smith", "name_first": "Joseph"}, {"name_last": "Smith", "name_first": "Joe"}]' \
@@ -4542,7 +4542,7 @@ class G2CmdShell(cmd.Cmd):
             return
 
         #--see if they gave us json
-        try: 
+        try:
             jsonData = json.loads(arg)
             record1json = dictKeysUpper(jsonData[0])
             record2json = dictKeysUpper(jsonData[1])
@@ -4555,7 +4555,7 @@ class G2CmdShell(cmd.Cmd):
         record2json['TRUSTED_ID_NUMBER'] = 'SCORE_TEST'
 
         #--add the records
-        try: 
+        try:
             retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_1', json.dumps(record1json))
             retcode = g2Engine.addRecord('TEST', 'SCORE_RECORD_2', json.dumps(record2json))
         except G2Exception as err:
@@ -4564,8 +4564,8 @@ class G2CmdShell(cmd.Cmd):
 
         self.do_why('TEST SCORE_RECORD_1 TEST SCORE_RECORD_2')
 
-        #--delete the two temporary records 
-        try: 
+        #--delete the two temporary records
+        try:
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_1')
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_2')
         except G2Exception as err:
@@ -4581,7 +4581,7 @@ class G2CmdShell(cmd.Cmd):
         #--such as an entity and its relationships
 
         #--possible kwargs
-        displayFlag = kwargs['displayFlag'] if 'displayFlag' in kwargs else None 
+        displayFlag = kwargs['displayFlag'] if 'displayFlag' in kwargs else None
         titleColor = kwargs['titleColor'] if 'titleColor' in kwargs else self.colors['tableTitle']
         titleJustify = kwargs['titleJustify'] if 'titleJustify' in kwargs else 'l' #--left
         headerColor = kwargs['headerColor'] if 'headerColor' in kwargs else self.colors['columnHeader']
@@ -4598,14 +4598,14 @@ class G2CmdShell(cmd.Cmd):
 
         #tableObject.title = tblTitle
         tableObject.hrules = PRETTY_TABLE_ALL
-        if pretty_table_style_available: 
+        if pretty_table_style_available:
             tableObject.set_style(SINGLE_BORDER)
         else:
             tableObject.horizontal_char = '\u2500'
             tableObject.vertical_char = '\u2502'
             tableObject.junction_char = '\u253C'
         tableObject.field_names = columnHeaderList
- 
+
         totalRowCnt = 0
         for row in tblRows:
             totalRowCnt += 1
@@ -4629,7 +4629,7 @@ class G2CmdShell(cmd.Cmd):
 
         writeMode = 'w'
         if displayFlag in ('append', 'end'):
-            fmtTableString = '\n' + fmtTableString 
+            fmtTableString = '\n' + fmtTableString
             writeMode = 'a'
 
         if writeMode == 'w':
@@ -4654,7 +4654,7 @@ class G2CmdShell(cmd.Cmd):
 
         #--note: the F allows less to auto quit if output fits on screen
         #-- if they purposely went into scroll mode, we should not auto-quit!
-        if arg == 'auto':  
+        if arg == 'auto':
             lessOptions = 'FMXSR'
         else:
             lessOptions = 'MXSR'
@@ -4723,20 +4723,20 @@ class G2CmdShell(cmd.Cmd):
 
         if not entityList:
             print('no entities selected!\n')
-            return 
+            return
 
         if not fileName:
             if len(entityList) == 1:
                 fileName = str(entityList[0]) + '.json'
             else:
                 fileName = 'records.json'
-            
+
         try: f = open(fileName, 'a' if additive else 'w')
         except IOError as err:
             print('cannot write to %s\n\t- %s' % (fileName, err))
             return
 
-        getFlagList = []    
+        getFlagList = []
         if apiVersion['VERSION'][0:1] == '1':
             getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
         else:
@@ -4755,10 +4755,10 @@ class G2CmdShell(cmd.Cmd):
             for entityId in currentEntityList:
                 exportedEntityList.append(entityId)
 
-                apiCall = f'getEntityByEntityIDV2({entityId})'
-                try: 
+                apiCall = f'getEntityByEntityID({entityId})'
+                try:
                     response = bytearray()
-                    retcode = g2Engine.getEntityByEntityIDV2(int(entityId), getFlagBits, response)
+                    retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
                     response = response.decode() if response else ''
                 except G2Exception as err:
                     print('\n' + str(err) + '\n')
@@ -4818,7 +4818,7 @@ class G2CmdShell(cmd.Cmd):
             attributeRecord['ADVANCED'] = 0
         if 'INTERNAL' not in attributeRecord:
             attributeRecord['INTERNAL'] = 0
-            
+
         jsonString = '{'
         jsonString += '"id": "%s"' % attributeRecord['ATTR_ID']
         jsonString += ', "attribute": "%s"' % attributeRecord['ATTR_CODE']
@@ -4827,10 +4827,10 @@ class G2CmdShell(cmd.Cmd):
         jsonString += ', "element": "%s"' % attributeRecord['FELEM_CODE']
         jsonString += ', "required": "%s"' % attributeRecord['FELEM_REQ'].title()
         jsonString += ', "default": "%s"' % attributeRecord['DEFAULT_VALUE']
-        jsonString += ', "advanced": "%s"' % ('Yes' if attributeRecord['ADVANCED'] == 1 else 'No') 
+        jsonString += ', "advanced": "%s"' % ('Yes' if attributeRecord['ADVANCED'] == 1 else 'No')
         jsonString += ', "internal": "%s"' % ('Yes' if attributeRecord['INTERNAL'] == 1 else 'No')
         jsonString += '}'
-        
+
         return jsonString
 
     # -----------------------------
@@ -4840,7 +4840,7 @@ class G2CmdShell(cmd.Cmd):
         attrRecords = self.getConfigData('CFG_ATTR', 'ATTR_CODE', attrStr.upper())
         if attrRecords and attrRecords[0]['INTERNAL'].upper().startswith('Y'):
             return True
-        return False 
+        return False
 
     # -----------------------------
     def computeApiFlagsx(self, flagList):
@@ -4885,7 +4885,7 @@ def formatMatchData(matchDict, colorscheme = None):
             priorKey = ''
             keyColor = 'fg.green'
             for key in re.split('(\+|\-)', matchDict['matchKey']):
-                if key in ('+',''): 
+                if key in ('+',''):
                     priorKey = '+'
                 elif key == '-':
                     priorKey = '-'
@@ -4921,16 +4921,16 @@ def showDebug(call, output=''):
         print('- %s -' % call)
         if type(output) == dict:
             print(json.dumps(output, indent=4))
-        elif output: 
+        elif output:
             print(output)
         print()
-    else: 
+    else:
         try:
             with open(debugOutput, 'a') as f:
                 f.write('- %s - \n' % call)
                 if type(output) == dict:
                     f.write(json.dumps(output))
-                elif output: 
+                elif output:
                     f.write(output)
                 f.write('\n\n')
 
@@ -4995,9 +4995,9 @@ def dictKeysUpper(dict):
 def showMeTheThings(data, loc=''):
     printWithNewLines('<---- DEBUG')
     printWithNewLines('Func: %s' % sys._getframe(1).f_code.co_name)
-    if loc != '': printWithNewLines('Where: %s' % loc) 
+    if loc != '': printWithNewLines('Where: %s' % loc)
     if type(data) == list:
-        printWithNewLines(('[%s]\n' * len(data)) % tuple(data)) 
+        printWithNewLines(('[%s]\n' * len(data)) % tuple(data))
     else:
         printWithNewLines('Data: %s' % str(data))
     printWithNewLines('---->', 'E')
@@ -5043,7 +5043,7 @@ if __name__ == '__main__':
     appPath = os.path.dirname(os.path.abspath(sys.argv[0]))
 
     #--defaults
-    try: iniFileName = G2Paths.get_G2Module_ini_path() 
+    try: iniFileName = G2Paths.get_G2Module_ini_path()
     except: iniFileName = ''
 
     #--capture the command line arguments
@@ -5075,7 +5075,7 @@ if __name__ == '__main__':
     if not os.path.exists(iniFileName):
         print('\nAn ini file was not found, please supply with the -c parameter\n')
         sys.exit(1)
- 
+
     splash = '\n  ____|  __ \\     \\    \n'
     splash += '  __|    |   |   _ \\   Senzing G2\n'
     splash += '  |      |   |  ___ \\  Exploratory Data Analysis\n'
@@ -5084,7 +5084,7 @@ if __name__ == '__main__':
     print(splash)
 
     #--get the version information
-    try: 
+    try:
         g2Product = G2Product()
         apiVersion = json.loads(g2Product.version())
     except G2Exception as err:
@@ -5105,15 +5105,15 @@ if __name__ == '__main__':
         sys.exit(1)
 
     #--get needed config data
-    try: 
+    try:
         g2ConfigMgr = G2ConfigMgr()
         if apiVersion['VERSION'][0:1] == '2':
             g2ConfigMgr.initV2('pyG2ConfigMgr', iniParams, False)
         else: #--eventually deprecate the above
             g2ConfigMgr.init('pyG2ConfigMgr', iniParams, False)
-        defaultConfigID = bytearray() 
+        defaultConfigID = bytearray()
         g2ConfigMgr.getDefaultConfigID(defaultConfigID)
-        defaultConfigDoc = bytearray() 
+        defaultConfigDoc = bytearray()
         g2ConfigMgr.getConfig(defaultConfigID, defaultConfigDoc)
         cfgData = json.loads(defaultConfigDoc.decode())
         g2ConfigMgr.destroy()
