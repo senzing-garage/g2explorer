@@ -40,11 +40,6 @@ except:
     try:
         import G2Paths
         from G2Product import G2Product
-        from G2Database import G2Database
-        from G2Diagnostic import G2Diagnostic
-        from G2Engine import G2Engine
-        from G2IniParams import G2IniParams
-        from G2ConfigMgr import G2ConfigMgr
         from G2Exception import G2Exception
     except:
         print('\nPlease export PYTHONPATH=<path to senzing python directory>\n')
@@ -201,6 +196,9 @@ def colorize_attr(attr_str, attr_color='attr_color'):
 def colorize_dsrc(dsrc_str):
     if ':' in dsrc_str:
         return colorize_attr(dsrc_str, 'dsrc_color')
+    return colorize(dsrc_str, 'dsrc_color')
+# -----------------------------
+def colorize_dsrc1(dsrc_str):
     return colorize(dsrc_str, 'dsrc_color')
 
 # -----------------------------
@@ -660,18 +658,15 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def do_quickLook (self,arg):
         '\nDisplays current data source stats without a snapshot'
-        g2_diagnostic_module = G2Diagnostic()
-        if apiVersion['VERSION'][0:1] == '2':
-            g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
-        else: #--eventually deprecate the above
-            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
         try:
+            g2_diagnostic_module = G2Diagnostic()
+            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
             response = bytearray()
             g2_diagnostic_module.getDataSourceCounts(response)
             response = response.decode() if response else ''
+            g2_diagnostic_module.destroy()
         except G2Exception as err:
             print(err)
-        g2_diagnostic_module.destroy()
 
         jsonResponse = json.loads(response)
 
@@ -1010,16 +1005,12 @@ class G2CmdShell(cmd.Cmd):
         entityList = list(set([x['newer_id'] for x in auditRecords]))
 
         getFlagList = []
-        if apiVersion['VERSION'][0:1] > '1':
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-            getFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_MATCHING_INFO')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS')
-        else:
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
+        getFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_MATCHING_INFO')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS')
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
 
         #--gather all the record data
         ftypesUsed = []
@@ -1627,7 +1618,7 @@ class G2CmdShell(cmd.Cmd):
                     if reply:
                         removeFromHistory()
                     else:
-                        break
+                        reply = 'N'
 
                     if reply.upper().startswith('Q'): #--quit
                         break
@@ -1698,17 +1689,14 @@ class G2CmdShell(cmd.Cmd):
             print('Searching ...')
             searchJson = parmData
             searchFlagList = []
-            if apiVersion['VERSION'][0:1] > '1':
-                searchFlagList.append('G2_SEARCH_INCLUDE_ALL_ENTITIES')
-                searchFlagList.append('G2_SEARCH_INCLUDE_FEATURE_SCORES')
-                searchFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
-                searchFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
-                searchFlagList.append('G2_SEARCH_INCLUDE_STATS')
-                searchFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-                searchFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
-            else:
-                searchFlagList.append('G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS')
-            searchFlagBits = self.computeApiFlags(searchFlagList)
+            searchFlagList.append('G2_SEARCH_INCLUDE_ALL_ENTITIES')
+            searchFlagList.append('G2_SEARCH_INCLUDE_FEATURE_SCORES')
+            searchFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
+            searchFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
+            searchFlagList.append('G2_SEARCH_INCLUDE_STATS')
+            searchFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
+            searchFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
+            searchFlagBits = G2EngineFlags.combine_flags(searchFlagList)
 
             try:
                 response = bytearray()
@@ -1921,19 +1909,15 @@ class G2CmdShell(cmd.Cmd):
                 arg = str(self.lastSearchResult[int(lastToken)-1])
 
         getFlagList = []
-        if apiVersion['VERSION'][0:1] > '1':
-            getFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_MATCHING_INFO')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FORMATTED_DATA')
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-            getFlagList.append('G2_ENTITY_INCLUDE_RELATED_ENTITY_NAME')
-            getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
-            getFlagList.append('G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY')
-        else:
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_MATCHING_INFO')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FORMATTED_DATA')
+        getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
+        getFlagList.append('G2_ENTITY_INCLUDE_RELATED_ENTITY_NAME')
+        getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
+        getFlagList.append('G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY')
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
 
         if len(arg.split()) == 1:
             apiCall = f'getEntityByEntityID({arg}, response, {getFlagBits})'
@@ -2138,7 +2122,7 @@ class G2CmdShell(cmd.Cmd):
 
         getFlagList = []
         getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
 
         apiCall = f'getEntityByEntityID({entityID}, response, {getFlagBits})'
         try:
@@ -2158,10 +2142,7 @@ class G2CmdShell(cmd.Cmd):
         jsonData = json.loads(response)
 
         g2_diagnostic_module = G2Diagnostic()
-        if apiVersion['VERSION'][0:1] == '2':
-            g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
-        else: #--eventually deprecate the above
-            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
+        g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
 
         #--get the features in order
         orderedFeatureList = []
@@ -2209,17 +2190,11 @@ class G2CmdShell(cmd.Cmd):
     def getAmbiguousEntitySet(self, entityId):
         #--get other ambiguous relationships if this is the ambiguous entity
         getFlagList = []
-        if apiVersion['VERSION'][0:1] > '1':
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-            getFlagList.append('G2_ENTITY_OPTION_INCLUDE_INTERNAL_FEATURES')
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-            getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
-        else:
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-            getFlagList.append('G2_ENTITY_SHOW_FEATURES_EXPRESSED')
-            getFlagList.append('G2_ENTITY_SHOW_FEATURES_STATS')
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
+        getFlagList.append('G2_ENTITY_OPTION_INCLUDE_INTERNAL_FEATURES')
+        getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
+        getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
         try:
             response = bytearray()
             retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
@@ -2291,19 +2266,15 @@ class G2CmdShell(cmd.Cmd):
             return -1 if calledDirect else 0
 
         getFlagList = []
-        if apiVersion['VERSION'][0:1] > '1':
-            getFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_MATCHING_INFO')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FORMATTED_DATA')
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-            getFlagList.append('G2_ENTITY_INCLUDE_RELATED_ENTITY_NAME')
-            getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
-            getFlagList.append('G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY')
-        else:
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_MATCHING_INFO')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FORMATTED_DATA')
+        getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
+        getFlagList.append('G2_ENTITY_INCLUDE_RELATED_ENTITY_NAME')
+        getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
+        getFlagList.append('G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY')
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
 
         compareList = []
         for entityId in entityList:
@@ -2497,6 +2468,8 @@ class G2CmdShell(cmd.Cmd):
         #--add the data
         tblRows = []
         tblRows.append([rowTitles['dataSourceRow']] + dataSourcesRow)
+        if len(''.join(crossRelsRow)) > 0:
+           tblRows.append([rowTitles['crossRelsRow']] + crossRelsRow)
         if len(''.join(nameDataRow)) > 0:
             tblRows.append([rowTitles['nameDataRow']] + nameDataRow)
         if len(''.join(attributeDataRow)) > 0:
@@ -2511,8 +2484,6 @@ class G2CmdShell(cmd.Cmd):
             tblRows.append([rowTitles['otherDataRow']] + otherDataRow)
         #if len(''.join(relationshipDataRow)) > 0:
         #    tblRows.append(['Disclosed Rels'] + relationshipDataRow)
-        if len(''.join(crossRelsRow)) > 0:
-           tblRows.append([rowTitles['crossRelsRow']] + crossRelsRow)
         if len(''.join(commonRelsRow)) > 0:
             tblRows.append([rowTitles['commonRelsRow']] + commonRelsRow)
 
@@ -2552,7 +2523,7 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_INCLUDE_RECORD_SUMMARY')
         getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
         getFlagList.append('G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
 
         apiCall = f'findNetworkByEntityID({entityParameter} {maxDegree} {buildOutDegree} {maxEntities} {getFlagBits})'
         try:
@@ -2799,11 +2770,7 @@ class G2CmdShell(cmd.Cmd):
             entityList = arg
         else:
 
-            #fileName = None
-            #if 'TO' in arg.upper():
-            #    fileName = arg[arg.upper().find('TO') + 2:].strip()
-            #    fileName = arg[:arg.upper().find('TO')].strip()
-            oldWhyNot = apiVersion['VERSION'][0:1] < '2'
+            oldWhyNot = False
             if arg.upper().endswith(' OLD'):
                 oldWhyNot = True
                 arg = arg[0:-4]
@@ -2935,7 +2902,7 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def whyEntity(self, entityList):
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagBits = G2EngineFlags.combine_flags(whyFlagList)
         try:
             response = bytearray()
             retcode = g2Engine.whyEntityByEntityID(int(entityList[0]), response, whyFlagBits)
@@ -2973,7 +2940,7 @@ class G2CmdShell(cmd.Cmd):
     # -----------------------------
     def whyRecords(self, entityList):
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagBits = G2EngineFlags.combine_flags(whyFlagList)
         try:
             response = bytearray()
             retcode = g2Engine.whyRecords(entityList[0], entityList[1], entityList[2], entityList[3], response, whyFlagBits)
@@ -3038,7 +3005,7 @@ class G2CmdShell(cmd.Cmd):
             return None
 
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagBits = G2EngineFlags.combine_flags(whyFlagList)
         try:
             response = bytearray()
             retcode = g2Engine.whyEntities(int(entityList[0]), int(entityList[1]), response, whyFlagBits)
@@ -3116,13 +3083,9 @@ class G2CmdShell(cmd.Cmd):
             return None
 
         whyFlagList = []
-
-        if apiVersion['VERSION'][0:1] > '1':
-            whyFlagList.append('G2_WHY_ENTITY_DEFAULT_FLAGS')
-            whyFlagList.append('G2_ENTITY_INCLUDE_RECORD_JSON_DATA')
-        else:
-            whyFlagList.append('G2_WHY_ENTITY_DEFAULT_FLAGS')
-        whyFlagBits = self.computeApiFlags(whyFlagList)
+        whyFlagList.append('G2_WHY_ENTITY_DEFAULT_FLAGS')
+        whyFlagList.append('G2_ENTITY_INCLUDE_RECORD_JSON_DATA')
+        whyFlagBits = G2EngineFlags.combine_flags(whyFlagList)
 
         masterFtypeList = []
         entityData = {}
@@ -3187,11 +3150,8 @@ class G2CmdShell(cmd.Cmd):
 
             #--see how this entity is related to the others
             getFlagList = []
-            if apiVersion['VERSION'][0:1] > '1':
-                getFlagList.append('G2_ENTITY_BRIEF_DEFAULT_FLAGS')
-            else:
-                getFlagList.append('G2_ENTITY_BRIEF_FORMAT')
-            getFlagBits = self.computeApiFlags(getFlagList)
+            getFlagList.append('G2_ENTITY_BRIEF_DEFAULT_FLAGS')
+            getFlagBits = G2EngineFlags.combine_flags(getFlagList)
             try:
                 response = bytearray()
                 retcode = g2Engine.getEntityByEntityID(int(entityId), response, getFlagBits)
@@ -3215,15 +3175,11 @@ class G2CmdShell(cmd.Cmd):
 
             #--search for this entity to get the scores against the others
             searchFlagList = []
-            if apiVersion['VERSION'][0:1] > '1':
-                searchFlagList.append('G2_SEARCH_INCLUDE_ALL_ENTITIES')
-                searchFlagList.append('G2_SEARCH_INCLUDE_FEATURE_SCORES')
-                searchFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
-                searchFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
-            else:
-                searchFlagList.append('G2_ENTITY_INCLUDE_NO_FEATURES')
-                searchFlagList.append('G2_ENTITY_INCLUDE_NO_RELATIONS')
-            searchFlagBits = self.computeApiFlags(searchFlagList)
+            searchFlagList.append('G2_SEARCH_INCLUDE_ALL_ENTITIES')
+            searchFlagList.append('G2_SEARCH_INCLUDE_FEATURE_SCORES')
+            searchFlagList.append('G2_ENTITY_INCLUDE_ENTITY_NAME')
+            searchFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
+            searchFlagBits = G2EngineFlags.combine_flags(searchFlagList)
 
             try:
                 response = bytearray()
@@ -3355,12 +3311,16 @@ class G2CmdShell(cmd.Cmd):
 
     # -----------------------------
     def whyFormatFeature(self, featureData, whyKey):
+        if len(featureData['featDesc']) > 60:
+            featureData['featDesc'] = featureData['featDesc'][0:57] + '...'
+        if len(featureData.get('matchedFeatDesc','')) > 60:
+            featureData['matchedFeatDesc'] = featureData['matchedFeatDesc'][0:57] + '...'
+
         featureData['formattedFeatDesc'] = featureData['featDesc'].strip()
         ftypeCode = featureData['ftypeCode']
         featureData['counterDisplay'] = self.feature_counter_display(featureData)
         featureData['formattedFeatDesc'] += ' ' + featureData['counterDisplay']
-        featureData['formattedFeatDesc1'] = ''
-        featureData['formattedFeatDesc2'] = ''
+        featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
 
         dimmit = any(c in featureData['counterDisplay'] for c in ['~','!','#'])
         featureData['sortOrder'] = 3
@@ -3380,26 +3340,25 @@ class G2CmdShell(cmd.Cmd):
                     featureData['featColor'] = 'bad'
             #if dimmit:
             #    featureData['featColor'] += ',dim'
-            featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], featureData['featColor'])
             featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
+            featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], featureData['featColor'])
 
             #--note: addresses may score same tho not exact!
             if featureData['matchLevel'] != 'SAME' or featureData['matchedFeatDesc'] != featureData['featDesc']:
                 featureData['formattedFeatDesc'] += '\n  '
-                featureData['formattedFeatDesc'] += colorize('%s (%s)' % (featureData['matchedFeatDesc'].strip(), featureData['matchScoreDisplay']), featureData['featColor'] + ',italics')
-            featureData['formattedFeatDesc2'] = colorize('%s (%s)' % (featureData['matchedFeatDesc'].strip(), featureData['matchScoreDisplay']), featureData['featColor'])
+                featureData['formattedFeatDesc'] += colorize(f"{featureData['matchedFeatDesc']} ({featureData['matchScoreDisplay']})", featureData['featColor'])
 
         elif 'matchScore' in featureData: #--must be same and likley a candidate builder
             featureData['sortOrder'] = 1
             featureData['featColor'] = 'highlight2' + (',dim' if dimmit else '')
-            featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], featureData['featColor'])
             featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
+            featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], featureData['featColor'])
 
         else:
-            if ftypeCode == 'AMBIGUOUS_ENTITY' and featureData['formattedFeatDesc'] .startswith(' ['):
-                featureData['formattedFeatDesc']  = 'Ambiguous!'
-                featureData['formattedFeatDesc']  = colorize(featDesc, 'bad')
-            featureData['formattedFeatDesc1'] = featureData['formattedFeatDesc']
+            if ftypeCode == 'AMBIGUOUS_ENTITY':
+                if featureData['formattedFeatDesc'] .startswith(' ['):
+                    featureData['formattedFeatDesc']  = 'Ambiguous!'
+            featureData['formattedFeatDesc1'] = colorize(featureData['formattedFeatDesc'], 'bad')
 
         #--sort rejected matches lower
         if dimmit:
@@ -3606,10 +3565,6 @@ class G2CmdShell(cmd.Cmd):
         #--no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
 
-        if apiVersion['VERSION'][0:1] < '3':
-            print('\nhow is only available in version 3.0 and higher\n')
-            return -1 if calledDirect else 0
-
         if not arg:
             self.help_how()
             return -1 if calledDirect else 0
@@ -3620,8 +3575,7 @@ class G2CmdShell(cmd.Cmd):
                 how_display_level = level
                 arg = arg.replace(level,'').strip()
 
-        try:
-            entity_id = int(arg)
+        try: entity_id = int(arg)
         except:
             print(f'\n invalid syntax: {arg} \n')
             self.help_how()
@@ -3633,7 +3587,7 @@ class G2CmdShell(cmd.Cmd):
         getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
         getFlagList.append('G2_ENTITY_OPTION_INCLUDE_FEATURE_STATS')
         getFlagList.append('G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
         apiCall = f'getEntityByEntityID({entity_id}, response, {getFlagBits})'
         try:
             response = bytearray()
@@ -3686,7 +3640,7 @@ class G2CmdShell(cmd.Cmd):
                     stat_pack['features'][ftype_id][feat_desc] += 1
 
         howFlagList = ['G2_HOW_ENTITY_DEFAULT_FLAGS']
-        howFlagBits = self.computeApiFlags(howFlagList)
+        howFlagBits = G2EngineFlags.combine_flags(howFlagList)
         try:
             response = bytearray()
             retcode = g2Engine.howEntityByEntityID(entity_id, response, howFlagBits)
@@ -4058,8 +4012,8 @@ class G2CmdShell(cmd.Cmd):
                         for ftypeId in sorted(features_by_type.keys(), key=lambda k: self.featureSequence[k]):
                             for featureData in sorted(sorted(features_by_type[ftypeId]['left'], key=lambda k: (k['featDesc'])), key=lambda k: (k['sortOrder'])):
                                 coloredFtypeCode = colorize_attr(featureData['ftypeCode'])
-                                coloredRecordKey1 = colorize_dsrc(': '.join(featureData['record_key1'].split(self.dsrc_record_sep)))
-                                coloredRecordKey2 = colorize_dsrc(': '.join(featureData['record_key2'].split(self.dsrc_record_sep)))
+                                coloredRecordKey1 = colorize_dsrc1(': '.join(featureData['record_key1'].split(self.dsrc_record_sep)))
+                                coloredRecordKey2 = colorize_dsrc1(': '.join(featureData['record_key2'].split(self.dsrc_record_sep)))
                                 coloredMatchScore = colorize(f"({featureData['matchScoreDisplay']})", featureData['featColor'])
                                 step_node_text += f"{coloredFtypeCode}: {coloredRecordKey1} - {featureData['featDesc']} | {coloredRecordKey2} - {featureData['matchedFeatDesc']} {coloredMatchScore}\n"
                     elif how_display_level != 'summary':
@@ -4067,9 +4021,9 @@ class G2CmdShell(cmd.Cmd):
                         tblTitle = None
                         tblColumns = []
                         tblColumns.append({'name': row_title, 'width': 20, 'align': 'left'})
-                        tblColumns.append({'name': colored_virtual_id1, 'width': 75, 'align': 'left'})
+                        tblColumns.append({'name': colored_virtual_id1, 'width': 70, 'align': 'left'})
                         tblColumns.append({'name': colorize('scores', 'dim'), 'width': 10, 'align': 'center'})
-                        tblColumns.append({'name': colored_virtual_id2, 'width': 75, 'align': 'left'})
+                        tblColumns.append({'name': colored_virtual_id2, 'width': 70, 'align': 'left'})
                         tblRows = []
 
                         row_title = colorize('DATA_SOURCES', 'row_title')
@@ -4081,7 +4035,7 @@ class G2CmdShell(cmd.Cmd):
                             if step_data[virtual_entity]['node_type'] == 'singleton':
                                 dsrc_display = step_data[virtual_entity]['colored_desc']
                             else:
-                                dsrc_display = step_data[virtual_entity]['node_desc'] + '\n best: ' + colorize_dsrc(': '.join(best_record_key.split(self.dsrc_record_sep)))
+                                dsrc_display = step_data[virtual_entity]['node_desc'] + '\n best: ' + colorize_dsrc1(': '.join(best_record_key.split(self.dsrc_record_sep)))
                             tblRow.append(dsrc_display)
                         tblRow.insert(2, '') #--for score column
                         tblRows.append(tblRow)
@@ -4109,7 +4063,7 @@ class G2CmdShell(cmd.Cmd):
 
                                     feature_desc1 = feature_data['formattedFeatDesc1']
                                     if step_data[left_virtual_entity]['node_type'] != 'singleton':
-                                        from_desc = 'from: ' + colorize_dsrc(': '.join(feature_data['record_key1'].split(self.dsrc_record_sep)))
+                                        from_desc = 'from: ' + colorize_dsrc1(': '.join(feature_data['record_key1'].split(self.dsrc_record_sep)))
                                         if feature_data['record_key1'] == best_left_record_key:
                                             from_desc = colorize(from_desc, 'dim')
                                         feature_desc1 += '\n ' + from_desc
@@ -4120,7 +4074,7 @@ class G2CmdShell(cmd.Cmd):
                                     else:
                                         feature_desc2 = scored_right[feature_data['matchedFeatId']]['formattedFeatDesc1']
                                     if step_data[right_virtual_entity]['node_type'] != 'singleton':
-                                        from_desc = 'from: ' + colorize_dsrc(': '.join(feature_data['record_key2'].split(self.dsrc_record_sep)))
+                                        from_desc = 'from: ' + colorize_dsrc1(': '.join(feature_data['record_key2'].split(self.dsrc_record_sep)))
                                         if feature_data['record_key2'] == best_right_record_key:
                                             from_desc = colorize(from_desc, 'dim')
                                         feature_desc2 += '\n ' + from_desc
@@ -4264,12 +4218,12 @@ class G2CmdShell(cmd.Cmd):
             virtual_entity_data['node_type'] = 'singleton'
             record = raw_virtual_entity_data['MEMBER_RECORDS'][0]['RECORDS'][0]
             virtual_entity_data['node_desc'] = record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note
-            virtual_entity_data['colored_desc'] = colorize_dsrc(record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note)
+            virtual_entity_data['colored_desc'] = colorize_dsrc1(record['DATA_SOURCE'] + ': ' + record['RECORD_ID'] + additional_note)
 
         else:
             virtual_entity_data['node_type'] = 'aggregate'
             virtual_entity_data['node_desc'] = ' | '.join(\
-                colorize_dsrc(ds + ' (' + str(len(virtual_entity_data['records'][ds])) + ')') \
+                colorize_dsrc1(ds + ' (' + str(len(virtual_entity_data['records'][ds])) + ')') \
                 for ds in sorted(virtual_entity_data['records'].keys()))
             virtual_entity_data['colored_desc'] = virtual_entity_data['node_desc']
 
@@ -4492,14 +4446,11 @@ class G2CmdShell(cmd.Cmd):
             return
 
         getFlagList = []
-        if apiVersion['VERSION'][0:1] == '1':
-            getFlagList.append('G2_ENTITY_INCLUDE_ALL_FEATURES')
-        else:
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
-            getFlagList.append('G2_ENTITY_INCLUDE_RECORD_JSON_DATA')
-            if maxDegree > 0:
-                getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
-        getFlagBits = self.computeApiFlags(getFlagList)
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_DATA')
+        getFlagList.append('G2_ENTITY_INCLUDE_RECORD_JSON_DATA')
+        if maxDegree > 0:
+            getFlagList.append('G2_ENTITY_INCLUDE_ALL_RELATIONS')
+        getFlagBits = G2EngineFlags.combine_flags(getFlagList)
 
         exportedEntityList = []
         recordCount = 0
@@ -4596,26 +4547,6 @@ class G2CmdShell(cmd.Cmd):
         if attrRecords and attrRecords[0]['INTERNAL'].upper().startswith('Y'):
             return True
         return False
-
-    # -----------------------------
-    def computeApiFlagsx(self, flagList):
-            flagBits = 0
-            for flagName in flagList:
-                if apiVersion['VERSION'][0:1] > '2':
-                    flagBits = flagBits | getattr(G2EngineFlags, flagName)
-                else:
-                    flagBits = flagBits | getattr(g2Engine, flagName)
-            return flagBits
-
-    # -----------------------------
-    def computeApiFlags(self, flagList):
-            if apiVersion['VERSION'][0:1] > '2':
-                return G2EngineFlags.combine_flags(flagList)
-            else:
-                flagBits = 0
-                for flagName in flagList:
-                    flagBits = flagBits | getattr(g2Engine, flagName)
-                return flagBits
 
 #----------------------------------------
 def showApiDebug(processName, apiCall, apiFlagList, jsonResponse):
@@ -4793,6 +4724,9 @@ if __name__ == '__main__':
     try:
         g2Product = G2Product()
         apiVersion = json.loads(g2Product.version())
+        if apiVersion['VERSION'][0:1] < '3':
+            print('\nThis program requires Senzing API version 3.0 or higher\n')
+            sys.exit(1)
     except G2Exception as err:
         print(err)
         sys.exit(1)
@@ -4802,10 +4736,7 @@ if __name__ == '__main__':
         g2Engine = G2Engine()
         iniParamCreator = G2IniParams()
         iniParams = iniParamCreator.getJsonINIParams(iniFileName)
-        if apiVersion['VERSION'][0:1] == '2':
-            g2Engine.initV2('G2Explorer', iniParams, False)
-        else: #--eventually deprecate the above
-            g2Engine.init('G2Explorer', iniParams, False)
+        g2Engine.init('G2Explorer', iniParams, False)
     except G2Exception as err:
         print('\n%s\n' % str(err))
         sys.exit(1)
@@ -4813,10 +4744,7 @@ if __name__ == '__main__':
     #--get needed config data
     try:
         g2ConfigMgr = G2ConfigMgr()
-        if apiVersion['VERSION'][0:1] == '2':
-            g2ConfigMgr.initV2('pyG2ConfigMgr', iniParams, False)
-        else: #--eventually deprecate the above
-            g2ConfigMgr.init('pyG2ConfigMgr', iniParams, False)
+        g2ConfigMgr.init('pyG2ConfigMgr', iniParams, False)
         defaultConfigID = bytearray()
         g2ConfigMgr.getDefaultConfigID(defaultConfigID)
         defaultConfigDoc = bytearray()
