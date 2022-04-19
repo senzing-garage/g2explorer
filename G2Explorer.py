@@ -455,7 +455,7 @@ class G2CmdShell(cmd.Cmd):
             {'setting': 'color_scheme', 'values': ['default', 'light', 'dark'], 'description': 'light works better on dark backgrounds and vice-versa'},
             {'setting': 'statistic_level', 'values': ['record', 'entity'], 'description': 'sets the statistical point of view of the data and crossSourceSummary reports'},
             {'setting': 'data_source_suppression', 'values': ['off', 'on'], 'description': 'restricts the data and crossSourceSummary reports to only applicable data sources'},
-            {'setting': 'show_relations_on_get', 'values': ['off', 'on'], 'description': 'always display relationships if any with each get of an entity ... or not!'}
+            {'setting': 'show_relations_on_get', 'values': ['on', 'off'], 'description': 'always display relationships if any with each get of an entity ... or not!'}
         ]
         for setting_data in self.configurable_settings_list:
             self.current_settings[setting_data['setting']] = self.current_settings.get(setting_data['setting'], setting_data['values'][0])
@@ -2035,6 +2035,8 @@ class G2CmdShell(cmd.Cmd):
 
             # --display if no relationships
             if relatedEntityCount == 0 or self.current_settings['show_relations_on_get'] == 'off':
+                #if relatedEntityCount != 0:  #--must add this to table footer somehow
+                #    print(f"{relatedEntityCount} related entities")
                 self.renderTable(tblTitle, tblColumns, recordList)
                 return 0
 
@@ -2054,7 +2056,7 @@ class G2CmdShell(cmd.Cmd):
                     relationship['DATA_SOURCES'].append(f"{colorize_dsrc(dataSource['DATA_SOURCE'])} ({dataSource['RECORD_COUNT']})")
                 relationships.append(relationship)
 
-            tblTitle = f'{relatedEntityCount} related entities'
+            tblTitle = f"{relatedEntityCount} related entities"
             tblColumns = []
             tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'left'})
             tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
@@ -4796,10 +4798,10 @@ if __name__ == '__main__':
         print('\nAn ini file was not found, please supply with the -c parameter\n')
         sys.exit(1)
 
-    splash = colorize('\n  ____|  __ \\     \\    \n', 'FG_LIGHTBLACK')
-    splash += colorize('  __|    |   |   _ \\   ', 'FG_LIGHTBLACK') + 'Senzing G2\n'
-    splash += colorize('  |      |   |  ___ \\  ', 'FG_LIGHTBLACK') + 'Exploratory Data Analysis\n'
-    splash += colorize(' _____| ____/ _/    _\\ \n', 'FG_LIGHTBLACK')
+    splash = colorize('\n  ____|  __ \\     \\    \n', 'DIM')
+    splash += colorize('  __|    |   |   _ \\   ', 'DIM') + 'Senzing G2\n'
+    splash += colorize('  |      |   |  ___ \\  ', 'DIM') + 'Exploratory Data Analysis\n'
+    splash += colorize(' _____| ____/ _/    _\\ \n', 'DIM')
     prompt = '(g2) '
     print(splash)
 
