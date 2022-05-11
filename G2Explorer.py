@@ -58,25 +58,37 @@ def execute_api_call(api_name, flag_list, parm_list):
         old_versions = {'getEntityByEntityID': 'getEntityByEntityIDV2',
                         'getEntityByRecordID': 'getEntityByRecordIDV2',
                         'searchByAttributes': 'searchByAttributesV2',
+                        'whyEntityByEntityID': 'whyEntityByEntityIDV2',
+                        'whyEntities': 'whyEntitiesV2',
+                        'whyRecords': 'whyRecordsV2',
                         'findNetworkByEntityID': 'findNetworkByEntityIDV2'}
         if api_name in old_versions:
             api_name = old_versions[api_name]
 
+    parm_list = parm_list if type(parm_list) == list else [parm_list]
+    called_by = sys._getframe().f_back.f_code.co_name
+
+    if not hasattr(g2Engine, api_name):
+        raise Exception(f"{called_by}: {api_name} not valid in {api_version['BUILD_VERSION']}")
+
     if api_version_major > 2:
-        flags = int(G2EngineFlags.combine_flags(flag_list))
+        try: flags = int(G2EngineFlags.combine_flags(flag_list))
+        except Exception as err:
+            raise Exception(f"{called_by}: {api_called} - {err}")
+
     else:
         flags = 0
         for flag_name in flag_list:
-            flags = flags | getattr(g2Engine, flag_name)
+            if hasattr(g2Engine, flag_name):
+                flags = flags | getattr(g2Engine, flag_name)
+            else:
+                raise Exception(f"{called_by}: {api_name} - {flag_name} flag not valid in {api_version['BUILD_VERSION']}")
 
     response = bytearray()
-    parm_list = parm_list if type(parm_list) == list else [parm_list]
     if api_version_major > 2:
         parm_list += [response, flags]
     else:
         parm_list += [flags, response]
-
-    called_by = sys._getframe().f_back.f_code.co_name
     api_called = f"{api_name}({', '.join(str(x) for x in parm_list)})"
 
     try:
@@ -86,9 +98,10 @@ def execute_api_call(api_name, flag_list, parm_list):
         if debugOutput:
             showDebug(called_by, api_called + '\n\t' + '\n\t'.join(flag_list) + '\n' + json.dumps(response_data, indent=4))
         return response_data
-    except Exception as err:
-        print(f"\n{called_by}:{api_called}\n{err}\n")
-        raise Exception(err)
+    except G2Exception as err:
+        raise Exception(f"{called_by}: {api_called} - {err}")
+    #except Exception as err:
+    #    raise Exception(f"{called_by}: {api_called} - {err}")
 
 # ==============================
 class Colors:
@@ -286,13 +299,30 @@ def colorize_match_data(matchDict):
         if badSegments:
             matchStr += colorize('-' + '-'.join(badSegments), 'bad')
 
-    if 'ruleCode' in matchDict:
-        matchStr += (f"\n {colorize(matchDict['ruleCode'], 'dim')}")
+    if matchDict.get('ruleCode'):
+        matchStr += f"\n {colorize(matchDict['ruleCode'], 'dim')}"
 
-    if 'entityId' in matchDict:
-        matchStr += (f" to {colorize_entity(matchDict['entityId'])}")
+    if 'entityId' in matchDict and 'entityName' in matchDict:
+        matchStr += f"\n to {colorize_entity(matchDict['entityId'])} {matchDict['entityName']}"
+    elif 'entityId' in matchDict:
+        matchStr += f" to {colorize_entity(matchDict['entityId'])}"
 
     return matchStr
+
+
+# --------------------------------------
+def print_message(msg_text, msg_type_or_color = ''):
+    if msg_type_or_color.upper() == 'ERROR':
+        msg_color = 'FG_RED'
+    elif msg_type_or_color.upper() == 'WARNING':
+        msg_color = 'FG_YELLOW'
+    elif msg_type_or_color.upper() == 'INFO':
+        msg_color = 'FG_CYAN'
+    elif msg_type_or_color.upper() == 'SUCCESS':
+        msg_color = 'FG_GREEN'
+    else:
+        msg_color = msg_type_or_color
+    print(f"\n{Colors.apply(msg_text, msg_color)}\n")
 
 
 # ==============================
@@ -508,6 +538,7 @@ class G2CmdShell(cmd.Cmd):
 
         self.lastSearchResult = []
         self.currentReviewList = None
+        self.currentRenderString = None
 
         # history
         self.readlineAvail = True if 'readline' in sys.modules else False
@@ -549,10 +580,10 @@ class G2CmdShell(cmd.Cmd):
                 if ans in ['y', 'Y', 'yes', 'YES']:
                     break
             except TypeError as ex:
-                printWithNewLines("ERROR: " + str(ex))
+                print_message(str(ex), 'error')
                 type_, value_, traceback_ = sys.exc_info()
                 for item in traceback.format_tb(traceback_):
-                    printWithNewLines(item)
+                    print(item)
 
     # ---------------------------
     def postloop(self):
@@ -563,12 +594,12 @@ class G2CmdShell(cmd.Cmd):
             pass
 
     # ---------------------------
-    def help_KnowledgeCenter(self):
-        printWithNewLines('Senzing Knowledge Center: https://senzing.zendesk.com/hc/en-us', 'B')
+    def help_knowledgeCenter(self):
+        print(f"\nSenzing Knowledge Center: {colorize('https://senzing.zendesk.com/hc/en-us', 'highlight2, underline')}\n")
 
     # ---------------------------
-    def help_Support(self):
-        printWithNewLines('Senzing Support Request: https://senzing.zendesk.com/hc/en-us/requests/new', 'B')
+    def help_support(self):
+        print(f"\nSenzing Support Request: {colorize('https://senzing.zendesk.com/hc/en-us/requests/new', 'highlight2, underline')}\n")
 
     # ---------------------------
     def histCheck(self):
@@ -615,29 +646,30 @@ class G2CmdShell(cmd.Cmd):
         if self.histAvail:
             print()
             for i in range(readline.get_current_history_length()):
-                printWithNewLines(readline.get_history_item(i + 1))
+                print(readline.get_history_item(i + 1))
             print()
         else:
-            printWithNewLines('History isn\'t available in this session.', 'B')
+            print_message("History isn\'t available in this session", 'warning')
 
     # ---------------------------
     def do_shell(self, line):
-        '\nRun OS shell commands: !<command>\n'
-        output = os.popen(line).read()
-        print(f"\n{output}\n")
+        '''\nRun OS shell commands: !<command>\n'''
+        if line:
+            output = os.popen(line).read()
+            print(f"\n{output}\n")
 
     # ---------------------------
     def help_set(self):
         print(textwrap.dedent(f'''\
 
-            {colorize('syntax:', 'highlight1')}
-                set <setting> <value>
+        {colorize('Syntax:', 'highlight2')}
+            set <setting> <value>
 
-            {colorize('settings:', 'highlight1')} '''))
-        print(colorize(f"    {'setting':<23} {'[possible values]':<22} {'current':<8} {'description'}", 'bold'))
+        {colorize('settings:', 'highlight2')} '''))
+        print(colorize(f"    {'setting':<23} {'[possible values]':<22} {'current':<13} {'description'}", 'dim'))
         for setting_data in self.configurable_settings_list:
-            current_value = colorize(self.current_settings[setting_data['setting']], 'highlight2')
-            print(f"    {setting_data['setting']:<23} {'[' + ', '.join(setting_data['values']) + ']':<22} {current_value:<22} {setting_data['description']}")
+            current_value = colorize(self.current_settings[setting_data['setting']], 'bold')
+            print(f"    {setting_data['setting']:<23} {'[' + ', '.join(setting_data['values']) + ']':<22} {current_value:<22} {colorize(setting_data['description'], 'dim')}")
         print()
 
     # ---------------------------
@@ -650,56 +682,59 @@ class G2CmdShell(cmd.Cmd):
         for setting_data in self.configurable_settings_list:
             settings_dict[setting_data['setting']] = setting_data['values']
 
-        arg_list = arg.split()
-        if len(arg_list) != 2 or (arg_list[0] not in settings_dict) or (arg_list[1] not in settings_dict[arg_list[0]]):
-            # print('['+arg_list[0]+']', arg_list[0] in [item['setting'] for item in self.configurable_settings_list])
-            print(colorize('\ninvalid setting\n', 'fg_red'))
-            # self.help_set()
-            return
+        if settings_dict:
+            arg_list = arg.split()
+            if len(arg_list) != 2 or (arg_list[0] not in settings_dict) or (arg_list[1] not in settings_dict[arg_list[0]]):
+                print_message('Invalid setting', 'error')
+                return
 
         self.current_settings[arg_list[0]] = arg_list[1]
         if arg_list[0] == 'color_scheme':
             Colors.set_theme(arg_list[1])
 
+
     # ---------------------------
     def do_version(self, arg):
         print(f"\nSenzing api version is: {api_version['BUILD_VERSION']}\n")
 
+
+    # ---------------------------
+    def help_load(self):
+
+        print(textwrap.dedent(f'''\
+
+        {colorize('Syntax:', 'highlight2')}
+            load <snapshotFile.json>  {colorize('loads a snapshot file for review', 'dim')}
+            load <auditFile.json>     {colorize('loads an audit file for review', 'dim')}
+
+        '''))
+
     # ---------------------------
     def do_load(self, arg):
-        '''
-        \nLoads statistical json files computed by G2Snapshot.py and G2Audit.py.
-        \n\nSyntax:
-        \n\tload <snapshotFile.json>
-        \n\tload <auditFile.json>\n
-        '''
-
-        if not argCheck('do_load', arg, self.do_load.__doc__):
-            return
 
         statpackFileName = arg
         if not os.path.exists(statpackFileName):
-            print('\nfile not found!\n')
+            print_message('File not found!', 'error')
             return
 
         try:
             jsonData = json.load(open(statpackFileName, encoding="utf-8"))
         except ValueError as err:
-            print(f"\nError in {statpackFileName} ...\n\t{err}\n")
+            print_message(err, 'error')
             return
 
         if 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Snapshot'):  # 'pocSnapshot',
             self.current_settings['snapshotFile'] = statpackFileName
             self.snapshotFile = statpackFileName
             self.snapshotData = jsonData
-            print(f"\nsucessfully loaded {statpackFileName}\n")
+            print_message(f"sucessfully loaded {statpackFileName}", 'info')
         elif 'SOURCE' in jsonData and jsonData['SOURCE'] in ('G2Audit'):  # 'pocAudit',
             self.current_settings['auditFile'] = statpackFileName
             self.auditFile = statpackFileName
             self.auditData = jsonData
-            print(f"\nsucessfully loaded {statpackFileName}\n")
+            print_message(f"sucessfully loaded {statpackFileName}", 'info')
         else:
-            print('\ninvalid G2Explorer statistics file\n')
+            print_message('Invalid G2Explorer statistics file', 'error')
 
     # ---------------------------
     def complete_load(self, text, line, begidx, endidx):
@@ -718,8 +753,11 @@ class G2CmdShell(cmd.Cmd):
         return completions
 
     # ---------------------------
+    def help_quickLook(self):
+        print('\nDisplays current data source stats without a snapshot\n')
+
+    # ---------------------------
     def do_quickLook(self, arg):
-        '\nDisplays current data source stats without a snapshot'
         try:
             g2_diagnostic_module = G2Diagnostic()
             if api_version_major > 2:
@@ -731,7 +769,7 @@ class G2CmdShell(cmd.Cmd):
             response = response.decode() if response else ''
             g2_diagnostic_module.destroy()
         except G2Exception as err:
-            print(err)
+            print_message(err, 'error')
             return
         jsonResponse = json.loads(response)
 
@@ -785,7 +823,7 @@ class G2CmdShell(cmd.Cmd):
                 if reply.isnumeric() and int(reply) > 0 and int(reply) <= max_items:
                     return int(reply) - 1
                 else:
-                    print('\nInvalid sample item number for this sample set!\n')
+                    print_message('Invalid sample item number for this sample set!', 'warning')
         return current_item
 
     # ---------------------------
@@ -796,20 +834,29 @@ class G2CmdShell(cmd.Cmd):
             self.do_export(','.join(currentRecords) + ' to ' + fileName)
 
     # ---------------------------
+    def help_auditSummary(self):
+        print(textwrap.dedent(f'''\
+
+        Displays audit statistics and examples.
+
+        {colorize('Syntax:', 'highlight2')}
+            auditSummary                        {colorize('with no parameters displays the overall stats', 'dim')}
+            auditSummary merge                  {colorize('shows a list of merge sub-categories', 'dim')}
+            auditSummary merge 1                {colorize('shows examples of merges in sub-category 1', 'dim')}
+            auditSummary split                  {colorize('shows a list of split sub-categories', 'dim')}
+            auditSummary split 1                {colorize('shows examples of splits in sub-category 1', 'dim')}
+            auditSummary save to <filename.csv> {colorize('saves the entire audit report to a csv file', 'dim')}
+
+        '''))
+
+
+    # ---------------------------
     def do_auditSummary(self, arg):
-        '''
-        \nDisplays the stats and examples of an audit performed with G2Audit.py
-        \n\nSyntax:
-        \n\tauditSummary         (with no parameters displays the overall stats)
-        \n\tauditSummary merge   (shows a list of merge sub-categories)
-        \n\tauditSummary merge 1 (shows examples of merges in sub-category 1)
-        \n\tauditSummary split   (shows a list of split sub-categories)
-        \n\tauditSummary split 1 (shows examples of splits in sub-category 1)
-        \n\tauditSummary save to <filename.csv> (saves the entire audit report to a csv file)\n
-        '''
 
         if not self.auditData or 'AUDIT' not in self.auditData:
-            printWithNewLines('Please load a json file created with G2Audit.py to use this command', 'B')
+            print_message('Please load a json file created with G2Audit.py to use this command', 'warning')
+        elif not self.auditData['ENTITY'].get('PRIOR_COUNT'):
+            print_message('Prior version audit file detected.  Please review with the prior version or re-create for this one.', 'warning')
             return
 
         categoryColors = {}
@@ -937,8 +984,6 @@ class G2CmdShell(cmd.Cmd):
                             if columnName not in fileHeaders:
                                 fileHeaders.append(columnName)
                         for recordData in tableData:
-                            # print(tableHeaders)
-                            # print(rowData)
                             rowData = dict(zip(recordHeaders, recordData))
                             rowData['category'] = category
                             rowData['sub_category'] = subCategory
@@ -946,20 +991,20 @@ class G2CmdShell(cmd.Cmd):
                             fileRows.append(rowData)
                             rowCnt += 1
                             if rowCnt % 1000 == 0:
-                                print('%s records processed' % rowCnt)
+                                print(f"{rowCnt} records processed")
 
             with open(fileName, 'w', encoding='utf-8') as f:
                 w = csv.DictWriter(f, fileHeaders, dialect=csv.excel, quoting=csv.QUOTE_ALL)
                 w.writeheader()
                 for rowData in fileRows:
                     w.writerow(rowData)
-            print('%s records written to %s' % (rowCnt, fileName))
+            print_message(f"{rowCnt} records written to {fileName}!", 'success')
 
         # display next level report
         else:
             argList = arg.upper().split()
             if argList[0] not in self.auditData['AUDIT']:
-                printWithNewLines('%s not found, please choose a valid split or merge category' % arg, 'B')
+                print_message(f"{arg} not found, please choose a valid split or merge category", 'error')
                 return
 
             category = argList[0]
@@ -1003,7 +1048,7 @@ class G2CmdShell(cmd.Cmd):
                         break
 
             if not indexCategories:
-                printWithNewLines('Invalid subcategory for %s' % argList[0].lower(), 'B')
+                print_message(f"Invalid subcategory for {argList[0].lower()}", 'error')
                 return
 
             # gather sample records
@@ -1047,8 +1092,6 @@ class G2CmdShell(cmd.Cmd):
     # ---------------------------
     def complete_auditSummary(self, text, line, begidx, endidx):
         before_arg = line.rfind(" ", 0, begidx)
-        # if before_arg == -1:
-        #    return # arg not found
 
         fixed = line[before_arg + 1:begidx]  # fixed portion of the arg
         arg = line[before_arg + 1:endidx]
@@ -1098,6 +1141,7 @@ class G2CmdShell(cmd.Cmd):
             try:
                 jsonData = execute_api_call('getEntityByEntityID', getFlagList, int(entityId))
             except Exception as err:
+                print_message(err, 'error')
                 return -1 if calledDirect else 0
 
             # get the list of features for the entity
@@ -1201,21 +1245,27 @@ class G2CmdShell(cmd.Cmd):
             return
 
     # ---------------------------
+    def help_entitySizeBreakdown(self):
+        print(textwrap.dedent(f'''\
+
+        Displays the number of entities by how many records they contain.
+
+        {colorize('Syntax:', 'highlight2')}
+            entitySizeBreakdown                    {colorize('with no parameters displays the overall stats', 'dim')}
+            entitySizeBreakdown = 3                {colorize('use =, > or < # to select examples of entities of a certain size', 'dim')}
+            entitySizeBreakdown > 10 review        {colorize('to just browse the review items of entities greater than size 10', 'dim')}
+            entitySizeBreakdown = review name+addr {colorize('to just browse the name+addr review items of any size', 'dim')}
+
+        {colorize('review items:', 'highlight2')}
+            Review items are suggestions of records to look at because they contain multiple names, addresses, dobs, etc.
+            They may be overmatches or they may just be large entities with lots of values.
+
+        '''))
+    # ---------------------------
     def do_entitySizeBreakdown(self, arg):
-        '''
-        \nDisplays the stats for entities based on their size (how many records they contain).
-        \n\nSyntax:
-        \n\tentitySizeBreakdown                    (with no parameters displays the overall stats)
-        \n\tentitySizeBreakdown = 3                (use =, > or < # to select examples of entities of a certain size)
-        \n\tentitySizeBreakdown > 10 review        (to just browse the review items of entities greater than size 10)
-        \n\tentitySizeBreakdown = review name+addr (to just browse the name+addr review items of any size)
-        \n\nNotes:
-        \n\tReview items are suggestions of records to look at because they contain multiple names, addresses, dobs, etc.
-        \n\tThey may be overmatches or they may just be large entities with lots of values.\n
-        '''
 
         if not self.snapshotData or (not self.snapshotData.get('ENTITY_SIZE_BREAKDOWN') and not self.snapshotData.get('TEMP_ESB_STATS')):
-            print('\nPlease load a json file created with G2Snapshot.py to access this report')
+            print_message('Please load a json file created with G2Snapshot.py to access this report', 'warning')
             return
 
         if not self.snapshotData.get('ENTITY_SIZE_BREAKDOWN'):
@@ -1299,7 +1349,7 @@ class G2CmdShell(cmd.Cmd):
                 sampleRecords.extend(theseRecords)
 
             if len(sampleRecords) == 0:
-                print('\nNo records found for entitySizeBreakdown %s, command syntax: %s \n' % (arg, '\n\n' + self.do_entitySizeBreakdown.__doc__[1:]))
+                print_message('No records found', 'warning')
             else:
 
                 currentSample = 0
@@ -1314,7 +1364,7 @@ class G2CmdShell(cmd.Cmd):
                     currentRecords = [str(sampleRecords[currentSample]['ENTITY_ID'])]
                     returnCode = self.do_get(currentRecords[0])
                     if returnCode != 0:
-                        printWithNewLines('The statistics loaded are out of date for this entity', 'E')
+                        print_message('This entity no longer exists', 'error')
 
                     reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
                     if reply:
@@ -1406,20 +1456,24 @@ class G2CmdShell(cmd.Cmd):
             with open(self.snapshotFile, 'w') as f:
                 json.dump(self.snapshotData, f)
         except IOError as err:
-            print('Could not save review to %s ...' % self.snapshotFile)
-            input('Press enter to continue')
+            print_message(f"Could not save review to {self.snapshotFile}", 'error')
+
+    # ---------------------------
+    def help_dataSourceSummary(self):
+        print(textwrap.dedent(f'''\
+
+        Displays the statistics for the different match levels within each data source.
+
+        {colorize('Syntax:', 'highlight2')}
+            dataSourceSummary                               {colorize('with no parameters displays the overall stats', 'dim')}
+            dataSourceSummary <dataSourceCode> <matchLevel> {colorize('where 0=Singletons, 1=Duplicates, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
+        '''))
+
 
     # ---------------------------
     def do_dataSourceSummary(self, arg):
-        '''
-        \nDisplays the stats for the different match levels within each data source.
-        \n\nSyntax:
-        \n\tdataSourceSummary (with no parameters displays the overall stats)
-        \n\tdataSourceSummary <dataSourceCode> <matchLevel>  where 0=Singletons, 1=Duplicates, 2=Ambiguous, 3=Possibles, 4=Relationships\n
-        '''
-
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
-            printWithNewLines('Please load a json file created with G2Snapshot.py to use this command', 'B')
+            print_message('Please load a json file created with G2Snapshot.py to use this command', 'warning')
             return
 
         # display the summary if no arguments
@@ -1465,12 +1519,12 @@ class G2CmdShell(cmd.Cmd):
         else:
             argTokens = arg.split()
             if len(argTokens) != 2:
-                print('\nMissing argument(s) for %s, command syntax: %s \n' % ('do_dataSourceSummary', '\n\n' + self.do_dataSourceSummary.__doc__[1:]))
+                print_message('Arguments missing: data source and match level are required', 'warning')
                 return
 
             dataSource = argTokens[0].upper()
             if dataSource not in self.snapshotData['DATA_SOURCES']:
-                printWithNewLines('%s is not a valid data source' % dataSource, 'B')
+                print_message('Invalid data source', 'error')
                 return
 
             matchLevel = argTokens[1].upper()
@@ -1480,69 +1534,67 @@ class G2CmdShell(cmd.Cmd):
                     matchLevelCode = self.validMatchLevelParameters[matchLevelParameter]
                     break
             if not matchLevelCode:
-                printWithNewLines('%s is not a valid match level' % matchLevel, 'B')
+                print_message('Invalid match level', 'error')
                 return
 
             try:
                 sampleRecords = [k for k in self.snapshotData['DATA_SOURCES'][dataSource][matchLevelCode]]
             except:
-                printWithNewLines('no samples found for %s' % arg, 'B')
+                sampleRecords = []
+            if len(sampleRecords) == 0:
+                print_message('No records found', 'warning')
                 return
 
-            if len(sampleRecords) == 0:
-                printWithNewLines('no entities to display!', 'B')
-            else:
+            currentSample = 0
+            while True:
+                self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} in {dataSource}"
 
-                currentSample = 0
-                while True:
-                    self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} in {dataSource}"
-
-                    if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                        currentRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource])
-                    else:
-                        currentRecords = sampleRecords[currentSample].split()[:2]
-                        if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
-                            ambiguousList = self.getAmbiguousEntitySet(currentRecords[0])  # is this the ambiguous entity
+                if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
+                    currentRecords = [str(sampleRecords[currentSample])]
+                    returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource])
+                else:
+                    currentRecords = sampleRecords[currentSample].split()[:2]
+                    if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
+                        ambiguousList = self.getAmbiguousEntitySet(currentRecords[0])  # is this the ambiguous entity
+                        if ambiguousList:
+                            currentRecords = ambiguousList
+                        else:
+                            ambiguousList = self.getAmbiguousEntitySet(currentRecords[1])  # or is this the ambiguous entity
                             if ambiguousList:
                                 currentRecords = ambiguousList
                             else:
-                                ambiguousList = self.getAmbiguousEntitySet(currentRecords[1])  # or is this the ambiguous entity
-                                if ambiguousList:
-                                    currentRecords = ambiguousList
-                                else:
-                                    pass  # if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
+                                pass  # if its neither, just show the original two entities
+                    returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
 
-                    if returnCode != 0:
-                        printWithNewLines('The statistics loaded are out of date for this record!', 'E')
+                if returnCode != 0:
+                    print_message('This entity no longer exists', 'error')
 
-                    if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
-                        special_actions = 'DHWE'
-                    else:
-                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (Q)uit ...'))
-                        special_actions = 'WE'
-                    if reply:
-                        removeFromHistory()
-                    else:
-                        reply = 'N'
+                if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
+                    special_actions = 'DHWE'
+                else:
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (Q)uit ...'))
+                    special_actions = 'WE'
+                if reply:
+                    removeFromHistory()
+                else:
+                    reply = 'N'
 
-                    if reply.upper().startswith('Q'):  # quit
-                        break
-                    elif reply.upper()[0] in 'PNG':  # previous, next, goto
-                        currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
-                    elif reply.upper()[0] in special_actions:
-                        if reply.upper().startswith('D'):
-                            self.do_get('detail ' + ','.join(currentRecords))
-                        elif reply.upper().startswith('W'):
-                            self.do_why(','.join(currentRecords))
-                        elif reply.upper().startswith('H'):
-                            self.do_how(','.join(currentRecords))
-                        elif reply.upper().startswith('E'):
-                            self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
-                        input('\npress enter to return to report')
-                self.currentReviewList = None
+                if reply.upper().startswith('Q'):  # quit
+                    break
+                elif reply.upper()[0] in 'PNG':  # previous, next, goto
+                    currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                elif reply.upper()[0] in special_actions:
+                    if reply.upper().startswith('D'):
+                        self.do_get('detail ' + ','.join(currentRecords))
+                    elif reply.upper().startswith('W'):
+                        self.do_why(','.join(currentRecords))
+                    elif reply.upper().startswith('H'):
+                        self.do_how(','.join(currentRecords))
+                    elif reply.upper().startswith('E'):
+                        self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
+                    input('\npress enter to return to report')
+            self.currentReviewList = None
 
     # ---------------------------
     def complete_dataSourceSummary(self, text, line, begidx, endidx):
@@ -1560,24 +1612,30 @@ class G2CmdShell(cmd.Cmd):
                 for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
                     possibles.append(dataSource)
         elif spaces == 2:
-            possibles = ['singles', 'duplicates', 'ambiguous', 'possibles', 'relationships']
+            possibles = ['singles', 'duplicates', 'matches', 'ambiguous', 'possibles', 'relationships']
         else:
             possibles = []
 
         return [i for i in possibles if i.lower().startswith(arg.lower())]
 
     # ---------------------------
+    def help_crossSourceSummary(self):
+        print(textwrap.dedent(f'''\
+
+        Displays the statistics for the different match levels across data sources.
+
+        {colorize('Syntax:', 'highlight2')}
+            crossSourceSummary                                           {colorize('with no parameters displays the overall stats', 'dim')}
+            crossSourceSummary <dataSource1>                             {colorize('displays the cross matches for that data source only', 'dim')}
+            crossSourceSummary <dataSource1> <dataSource2> <matchLevel>  {colorize('where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
+        '''))
+
+
+    # ---------------------------
     def do_crossSourceSummary(self, arg):
-        '''
-        \nDisplays the stats for the different match levels across data sources.
-        \n\nSyntax:
-        \n\tcrossSourceSummary (with no parameters displays the overall stats)
-        \n\tcrossSourceSummary <dataSource1> (displays the cross matches for that data source only)
-        \n\tcrossSourceSummary <dataSource1> <dataSource2> <matchLevel> where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships\n
-        '''
 
         if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
-            print('\nPlease load a json file created with G2Snapshot.py to use this command\n')
+            print_message('Please load a json file created with G2Snapshot.py to use this command', 'warning')
             return
 
         # display the summary if no arguments
@@ -1618,17 +1676,17 @@ class G2CmdShell(cmd.Cmd):
         else:
             argTokens = arg.split()
             if len(argTokens) != 3:
-                print('\nMissing argument(s) for %s, command syntax: %s \n' % ('do_crossSourceSummary', '\n\n' + self.do_crossSourceSummary.__doc__[1:]))
+                print_message('Arguments missing: two data sources and match level are required', 'warning')
                 return
 
             dataSource1 = argTokens[0].upper()
             if dataSource1 not in self.snapshotData['DATA_SOURCES']:
-                printWithNewLines('%s is not a valid data source' % dataSource1, 'B')
+                print_message(f"Invalid data source: {dataSource1}", 'error')
                 return
 
             dataSource2 = argTokens[1].upper()
             if dataSource2 not in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES']:
-                printWithNewLines('%s is not a matching data source' % dataSource2, 'B')
+                print_message(f"Invalid data source: {dataSource2}", 'error')
                 return
 
             matchLevel = argTokens[2].upper()
@@ -1639,7 +1697,7 @@ class G2CmdShell(cmd.Cmd):
                     break
 
             if not matchLevelCode:
-                printWithNewLines('%s is not a valid match level' % matchLevel, 'B')
+                print_message('Invalid match level', 'error')
                 return
 
             # duplicates are matches for cross source
@@ -1649,63 +1707,62 @@ class G2CmdShell(cmd.Cmd):
             try:
                 sampleRecords = [k for k in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2][matchLevelCode]]
             except:
-                printWithNewLines('no samples found for %s' % arg, 'B')
-                return
+                sampleRecords = []
 
             if len(sampleRecords) == 0:
-                printWithNewLines('no samples to display!', 'B')
-            else:
+                print_message('No records found', 'warning')
+                return
 
-                currentSample = 0
-                while True:
-                    self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} between {dataSource1} and {dataSource2}"
+            currentSample = 0
+            while True:
+                self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} between {dataSource1} and {dataSource2}"
 
-                    if matchLevelCode in ('MATCH_SAMPLE'):
-                        currentRecords = [str(sampleRecords[currentSample])]
-                        returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource1, dataSource2])
-                    else:
-                        currentRecords = sampleRecords[currentSample].split()[:2]
-                        if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
-                            ambiguousList = self.getAmbiguousEntitySet(currentRecords[0])  # is this the ambiguous entity
+                if matchLevelCode in ('MATCH_SAMPLE'):
+                    currentRecords = [str(sampleRecords[currentSample])]
+                    returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource1, dataSource2])
+                else:
+                    currentRecords = sampleRecords[currentSample].split()[:2]
+                    if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
+                        ambiguousList = self.getAmbiguousEntitySet(currentRecords[0])  # is this the ambiguous entity
+                        if ambiguousList:
+                            currentRecords = ambiguousList
+                        else:
+                            ambiguousList = self.getAmbiguousEntitySet(currentRecords[1])  # or is this the ambiguous entity
                             if ambiguousList:
                                 currentRecords = ambiguousList
                             else:
-                                ambiguousList = self.getAmbiguousEntitySet(currentRecords[1])  # or is this the ambiguous entity
-                                if ambiguousList:
-                                    currentRecords = ambiguousList
-                                else:
-                                    pass  # if its neither, just show the original two entities
-                        returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource1, dataSource2])
+                                pass  # if its neither, just show the original two entities
+                    returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource1, dataSource2])
 
-                    if returnCode != 0:
-                        printWithNewLines('The statistics loaded are out of date for this entity', 'E')
+                if returnCode != 0:
+                    print_message('This entity no longer exists', 'error')
 
-                    if matchLevelCode in ('MATCH_SAMPLE'):
-                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
-                        special_actions = 'DHWE'
-                    else:
-                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (Q)uit ...'))
-                        special_actions = 'WE'
-                    if reply:
-                        removeFromHistory()
-                    else:
-                        reply = 'N'
+                if matchLevelCode in ('MATCH_SAMPLE'):
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (Q)uit ...'))
+                    special_actions = 'DHWE'
+                else:
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (Q)uit ...'))
+                    special_actions = 'WE'
+                if reply:
+                    removeFromHistory()
+                else:
+                    reply = 'N'
 
-                    if reply.upper().startswith('Q'):  # quit
-                        break
-                    elif reply.upper()[0] in 'PNG':  # previous, next, goto
-                        currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
-                    elif reply.upper()[0] in special_actions:
-                        if reply.upper().startswith('D'):
-                            self.do_get('detail ' + ','.join(currentRecords))
-                        elif reply.upper().startswith('W'):
-                            self.do_why(','.join(currentRecords))
-                        elif reply.upper().startswith('H'):
-                            self.do_how(','.join(currentRecords))
-                        elif reply.upper().startswith('E'):
-                            self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
-                        input('\npress enter to return to report')
-                self.currentReviewList = None
+                if reply.upper().startswith('Q'):  # quit
+                    break
+                elif reply.upper()[0] in 'PNG':  # previous, next, goto
+                    currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                elif reply.upper()[0] in special_actions:
+                    if reply.upper().startswith('D'):
+                        self.do_get('detail ' + ','.join(currentRecords))
+                    elif reply.upper().startswith('W'):
+                        self.do_why(','.join(currentRecords))
+                    elif reply.upper().startswith('H'):
+                        self.do_how(','.join(currentRecords))
+                    elif reply.upper().startswith('E'):
+                        self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
+                    input('\npress enter to return to report')
+            self.currentReviewList = None
 
     # ---------------------------
     def complete_crossSourceSummary(self, text, line, begidx, endidx):
@@ -1728,220 +1785,227 @@ class G2CmdShell(cmd.Cmd):
                 for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
                     possibles.append(dataSource)
         elif spaces == 3:
-            possibles = ['singles', 'duplicates', 'ambiguous', 'possibles', 'relationships']
+            possibles = ['singles', 'duplicates', 'matches', 'ambiguous', 'possibles', 'relationships']
         else:
             possibles = []
 
         return [i for i in possibles if i.lower().startswith(arg.lower())]
 
     # ---------------------------
-    def do_search(self, arg):
-        '''
-        \nSearches for entities by their attributes.
-        \n\nSyntax:
-        \n\tsearch Joe Smith (without a json structure performs a search on name alone)
-        \n\tsearch {"name_full": "Joe Smith"}
-        \n\tsearch {"name_org": "ABC Company"}
-        \n\tsearch {"name_last": "Smith", "name_first": "Joe", "date_of_birth": "1992-12-10"}
-        \n\tsearch {"name_org": "ABC Company", "addr_full": "111 First St, Anytown, USA 11111"}
-        \n\nNotes:
-        \n\tSearching by name alone may not locate a specific entity.
-        \n\tTry adding a date of birth, address, or phone number if not found by name alone.\n
-        '''
+    def help_search(self):
+        print(textwrap.dedent(f'''\
 
-        if not argCheck('do_search', arg, self.do_search.__doc__):
+        Search for an entity by its attributes.
+
+        {colorize('Syntax:', 'highlight2')}
+            search Joe Smith {colorize('without a json structure performs a search on name alone', 'dim')}
+            search {'{'}"name_full": "Joe Smith"{'}'}
+            search {'{'}"name_org": "ABC Company"{'}'}
+            search {'{'}"name_last": "Smith", "name_first": "Joe", "date_of_birth": "1992-12-10"{'}'}
+            search {'{'}"name_org": "ABC Company", "addr_full": "111 First St, Anytown, USA 11111"{'}'}
+
+        {colorize('Notes:', 'highlight2')}
+            Searching by name alone may not locate a specific entity.
+            Try adding a date of birth, address, or phone number if not found by name alone.
+        '''))
+
+
+    # ---------------------------
+    def do_search(self, arg):
+        if not arg:
+            self.help_search()
             return
 
         try:
             parmData = dictKeysUpper(json.loads(arg)) if arg.startswith('{') else {"PERSON_NAME_FULL": arg, "ORGANIZATION_NAME_ORG": arg}
-        except (ValueError, KeyError) as e:
-            argError(arg, e)
+        except (ValueError, KeyError) as err:
+            print_message(f"Invalid json parameter: {err}", 'error')
+            return
+
+        print('\nSearching ...')
+        searchJson = parmData
+        searchFlagList = ['G2_SEARCH_INCLUDE_ALL_ENTITIES',
+                          'G2_SEARCH_INCLUDE_FEATURE_SCORES',
+                          'G2_ENTITY_INCLUDE_ENTITY_NAME',
+                          'G2_ENTITY_INCLUDE_RECORD_DATA',
+                          'G2_SEARCH_INCLUDE_STATS',
+                          'G2_ENTITY_INCLUDE_ALL_RELATIONS',
+                          'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO']
+        try:
+            jsonResponse = execute_api_call('searchByAttributes', searchFlagList, json.dumps(searchJson))
+        except Exception as err:
+            print_message(err, 'error')
+            return
+
+        # constants for descriptions and sort orders
+        dataSourceOrder = []  # place your data sources here!
+
+        tblTitle = 'Search Results'
+        tblColumns = []
+        tblColumns.append({'name': 'Index', 'width': 5, 'align': 'center'})
+        tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'center'})
+        tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
+        tblColumns.append({'name': 'Data Sources', 'width': 50, 'align': 'left'})
+        tblColumns.append({'name': 'Match Key', 'width': 50, 'align': 'left'})
+        tblColumns.append({'name': 'Match Score', 'width': 15, 'align': 'center'})
+        tblColumns.append({'name': 'Relationships', 'width': 15, 'align': 'left'})
+
+        matchList = []
+        searchIndex = 0
+        for resolvedEntityBase in jsonResponse['RESOLVED_ENTITIES']:
+            resolvedEntity = resolvedEntityBase['ENTITY']['RESOLVED_ENTITY']
+            resolvedEntityMatchInfo = resolvedEntityBase['MATCH_INFO']
+            searchIndex += 1
+
+            # create a list of data sources we found them in
+            dataSources = {}
+            for record in resolvedEntity['RECORDS']:
+                dataSource = record['DATA_SOURCE']
+                if dataSource not in dataSources:
+                    dataSources[dataSource] = [record['RECORD_ID']]
+                else:
+                    dataSources[dataSource].append(record['RECORD_ID'])
+
+            dataSourceList = []
+            for dataSource in dataSources:
+                if len(dataSources[dataSource]) == 1:
+                    dataSourceList.append(colorize_dsrc(dataSource + ': ' + dataSources[dataSource][0]))
+                else:
+                    dataSourceList.append(colorize_dsrc(dataSource + ': ' + str(len(dataSources[dataSource])) + ' records'))
+
+            disclosedCount = 0
+            derivedCount = 0
+            for relationship in resolvedEntityBase['ENTITY']['RELATED_ENTITIES'] if 'RELATED_ENTITIES' in resolvedEntityBase['ENTITY'] else []:
+                if relationship['IS_DISCLOSED'] > 0:
+                    disclosedCount += 1
+                else:
+                    derivedCount += 1
+            relationshipLines = []
+            if derivedCount > 0:
+                relationshipLines.append(f"{derivedCount} {colorize('(derived)', 'dim')}")
+            if disclosedCount > 0:
+                relationshipLines.append(f"{disclosedCount} {colorize('(disclosed)', 'dim')}")
+
+            # determine the matching criteria
+            matchLevel = self.searchMatchLevels[resolvedEntityMatchInfo['MATCH_LEVEL']]
+            matchKey = resolvedEntityMatchInfo['MATCH_KEY']
+            ruleCode = resolvedEntityMatchInfo['ERRULE_CODE']
+            # scoring
+            bestScores = {}
+            bestScores['NAME'] = {}
+            bestScores['NAME']['score'] = 0
+            bestScores['NAME']['value'] = ''
+            for featureCode in resolvedEntityMatchInfo['FEATURE_SCORES']:
+                for scoreRecord in resolvedEntityMatchInfo['FEATURE_SCORES'][featureCode]:
+                    if featureCode == 'NAME':
+                        if 'BT_FN' in scoreRecord:
+                            scoreCode = 'BT_FN'
+                        else:
+                            scoreCode = 'GNR_FN'
+                    else:
+                        scoreCode = 'FULL_SCORE'
+                    matchingScore = scoreRecord[scoreCode]
+                    matchingValue = scoreRecord['CANDIDATE_FEAT']
+                    if featureCode not in bestScores:
+                        bestScores[featureCode] = {}
+                        bestScores[featureCode]['score'] = 0
+                        bestScores[featureCode]['value'] = 'n/a'
+                    if matchingScore > bestScores[featureCode]['score']:
+                        bestScores[featureCode]['score'] = matchingScore
+                        bestScores[featureCode]['value'] = matchingValue
+
+            # perform scoring (use stored match_score if not overridden in the mapping document)
+            matchedScore = bestScores['NAME']['score']
+            matchedName = bestScores['NAME']['value']
+
+            weightedScores = {}
+            for featureCode in bestScores:
+                weightedScores[featureCode] = {}
+                weightedScores[featureCode]['threshold'] = 0
+                weightedScores[featureCode]['+weight'] = 100
+                weightedScores[featureCode]['-weight'] = 0
+                # if scoredFeatureCount > 1:
+
+            matchScore = 0
+            for featureCode in bestScores:
+                if featureCode in weightedScores:
+                    if bestScores[featureCode]['score'] >= weightedScores[featureCode]['threshold']:
+                        matchScore += int(round(bestScores[featureCode]['score'] * (weightedScores[featureCode]['+weight'] / 100), 0))
+                    elif '-weight' in weightedScores[featureCode]:
+                        matchScore += -weightedScores[featureCode]['-weight']  # actual score does not matter if below the threshold
+
+            # create the possible match entity one-line summary
+            row = []
+            row.append(str(searchIndex))  # note this gets re-ordered below
+            row.append(str(resolvedEntity['ENTITY_ID']))
+            row.append(resolvedEntity['ENTITY_NAME'] + (('\n' + ' aka: ' + matchedName) if matchedName and matchedName != resolvedEntity['ENTITY_NAME'] else ''))
+            row.append('\n'.join(dataSourceList))
+            matchData = {}
+            matchData['matchKey'] = matchKey
+            matchData['ruleCode'] = self.getRuleDesc(ruleCode)
+            row.append(colorize_match_data(matchData))
+            row.append(matchScore)
+            row.append('\n'.join(relationshipLines))
+            matchList.append(row)
+
+        if len(matchList) == 0:
+            if 'SEARCH_STATISTICS' in jsonResponse:
+                if jsonResponse['SEARCH_STATISTICS'][0]['CANDIDATE_KEYS']['SUMMARY']['FOUND'] > 0:
+                    msg = '\tOne or more entities were found but did not score high enough to be returned'
+                    msg += '\n\tPlease include additional or more complete attributes in your search'
+                elif jsonResponse['SEARCH_STATISTICS'][0]['CANDIDATE_KEYS']['SUMMARY']['GENERIC'] > 0:
+                    msg = '\tToo many entities would be returned'
+                    msg += '\n\tPlease include additional attributes to narrow the search results'
+                elif jsonResponse['SEARCH_STATISTICS'][0]['CANDIDATE_KEYS']['SUMMARY']['NOT_FOUND'] > 0:
+                    msg = '\tNo entities at all were found'
+                    msg += '\n\tPlease search by other attributes for this entity if you feel it should exist'
+                else:
+                    msg = '\tNo search keys were even generated'
+                    msg += '\n\tPlease search by other attributes'
+
+            else:  # older versions do not have statistics
+                msg = '\tNo matches found or there were simply too many to return'
+                msg += '\n\tPlease include additional search parameters if you feel this entity is in the database'
+            print_message(msg, 'warning')
+
         else:
 
-            print('\nSearching ...')
-            searchJson = parmData
-            searchFlagList = ['G2_SEARCH_INCLUDE_ALL_ENTITIES',
-                              'G2_SEARCH_INCLUDE_FEATURE_SCORES',
-                              'G2_ENTITY_INCLUDE_ENTITY_NAME',
-                              'G2_ENTITY_INCLUDE_RECORD_DATA',
-                              'G2_SEARCH_INCLUDE_STATS',
-                              'G2_ENTITY_INCLUDE_ALL_RELATIONS',
-                              'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO']
-            try:
-                jsonResponse = execute_api_call('searchByAttributes', searchFlagList, json.dumps(searchJson))
-            except Exception as err:
-                return
+            # sort the list by match score descending
+            matchList = sorted(matchList, key=lambda x: x[5], reverse=True)
 
-            # constants for descriptions and sort orders
-            dataSourceOrder = []  # place your data sources here!
+            # store the last search result and colorize
+            self.lastSearchResult = []
+            for i in range(len(matchList)):
+                self.lastSearchResult.append(matchList[i][1])
+                matchList[i][0] = colorize(i + 1, 'row_title')
+                matchList[i][1] = colorize_entity(matchList[i][1])
+                matchList[i][2] = matchList[i][2]
+            self.renderTable(tblTitle, tblColumns, matchList)
 
-            tblTitle = 'Search Results'
-            tblColumns = []
-            tblColumns.append({'name': 'Index', 'width': 5, 'align': 'center'})
-            tblColumns.append({'name': 'Entity ID', 'width': 15, 'align': 'center'})
-            tblColumns.append({'name': 'Entity Name', 'width': 75, 'align': 'left'})
-            tblColumns.append({'name': 'Data Sources', 'width': 50, 'align': 'left'})
-            tblColumns.append({'name': 'Match Key', 'width': 50, 'align': 'left'})
-            tblColumns.append({'name': 'Match Score', 'width': 15, 'align': 'center'})
-            tblColumns.append({'name': 'Relationships', 'width': 15, 'align': 'left'})
+        print('')
 
-            matchList = []
-            searchIndex = 0
-            for resolvedEntityBase in jsonResponse['RESOLVED_ENTITIES']:
-                resolvedEntity = resolvedEntityBase['ENTITY']['RESOLVED_ENTITY']
-                resolvedEntityMatchInfo = resolvedEntityBase['MATCH_INFO']
-                searchIndex += 1
+    # ---------------------------
+    def help_get(self):
+        print(textwrap.dedent(f'''\
 
-                # create a list of data sources we found them in
-                dataSources = {}
-                for record in resolvedEntity['RECORDS']:
-                    dataSource = record['DATA_SOURCE']
-                    if dataSource not in dataSources:
-                        dataSources[dataSource] = [record['RECORD_ID']]
-                    else:
-                        dataSources[dataSource].append(record['RECORD_ID'])
+        Displays a particular entity by entity_id or by data_source and record_id.
 
-                dataSourceList = []
-                for dataSource in dataSources:
-                    if len(dataSources[dataSource]) == 1:
-                        dataSourceList.append(colorize_dsrc(dataSource + ': ' + dataSources[dataSource][0]))
-                    else:
-                        dataSourceList.append(colorize_dsrc(dataSource + ': ' + str(len(dataSources[dataSource])) + ' records'))
+        {colorize('Syntax:', 'highlight2')}
+            get <entity_id>               {colorize("looks up an entity's resume by entity ID", 'dim')}
+            get <dataSource> <recordID>   {colorize("looks up an entity's resume by data source and record ID", 'dim')}
+            get search <search index>     {colorize("looks up an entity's resume by search index (requires a prior search)", 'dim')}
+            get detail <entity_id>        {colorize('adding the "detail" tag displays each record rather than a summary by data source', 'dim')}
+            get features <entity_id>      {colorize('adding the "features" tag displays the entity features rather than the resume', 'dim')}
 
-                # relatedEntityCount = len(resolvedEntityBase['ENTITY']['RELATED_ENTITIES'] if 'RELATED_ENTITIES' in resolvedEntityBase['ENTITY'] else 0)
-                disclosedCount = 0
-                derivedCount = 0
-                for relationship in resolvedEntityBase['ENTITY']['RELATED_ENTITIES'] if 'RELATED_ENTITIES' in resolvedEntityBase['ENTITY'] else []:
-                    if relationship['IS_DISCLOSED'] > 0:
-                        disclosedCount += 1
-                    else:
-                        derivedCount += 1
-                relationshipLines = []
-                if derivedCount > 0:
-                    relationshipLines.append(f"{derivedCount} {colorize('(derived)', 'dim')}")
-                if disclosedCount > 0:
-                    relationshipLines.append(f"{disclosedCount} {colorize('(disclosed)', 'dim')}")
+        '''))
 
-                # determine the matching criteria
-                matchLevel = self.searchMatchLevels[resolvedEntityMatchInfo['MATCH_LEVEL']]
-                matchKey = resolvedEntityMatchInfo['MATCH_KEY']
-                ruleCode = resolvedEntityMatchInfo['ERRULE_CODE']
-                # scoring
-                bestScores = {}
-                bestScores['NAME'] = {}
-                bestScores['NAME']['score'] = 0
-                bestScores['NAME']['value'] = ''
-                for featureCode in resolvedEntityMatchInfo['FEATURE_SCORES']:
-                    for scoreRecord in resolvedEntityMatchInfo['FEATURE_SCORES'][featureCode]:
-                        if featureCode == 'NAME':
-                            if 'BT_FN' in scoreRecord:
-                                scoreCode = 'BT_FN'
-                            else:
-                                scoreCode = 'GNR_FN'
-                        else:
-                            scoreCode = 'FULL_SCORE'
-                        matchingScore = scoreRecord[scoreCode]
-                        matchingValue = scoreRecord['CANDIDATE_FEAT']
-                        if featureCode not in bestScores:
-                            bestScores[featureCode] = {}
-                            bestScores[featureCode]['score'] = 0
-                            bestScores[featureCode]['value'] = 'n/a'
-                        if matchingScore > bestScores[featureCode]['score']:
-                            bestScores[featureCode]['score'] = matchingScore
-                            bestScores[featureCode]['value'] = matchingValue
-
-                # perform scoring (use stored match_score if not overridden in the mapping document)
-                matchedScore = bestScores['NAME']['score']
-                matchedName = bestScores['NAME']['value']
-
-                weightedScores = {}
-                for featureCode in bestScores:
-                    weightedScores[featureCode] = {}
-                    weightedScores[featureCode]['threshold'] = 0
-                    weightedScores[featureCode]['+weight'] = 100
-                    weightedScores[featureCode]['-weight'] = 0
-                    # if scoredFeatureCount > 1:
-
-                matchScore = 0
-                for featureCode in bestScores:
-                    if featureCode in weightedScores:
-                        if bestScores[featureCode]['score'] >= weightedScores[featureCode]['threshold']:
-                            matchScore += int(round(bestScores[featureCode]['score'] * (weightedScores[featureCode]['+weight'] / 100), 0))
-                        elif '-weight' in weightedScores[featureCode]:
-                            matchScore += -weightedScores[featureCode]['-weight']  # actual score does not matter if below the threshold
-
-                # create the possible match entity one-line summary
-                row = []
-                row.append(str(searchIndex))  # note this gets re-ordered below
-                row.append(str(resolvedEntity['ENTITY_ID']))
-                row.append(resolvedEntity['ENTITY_NAME'] + (('\n' + ' aka: ' + matchedName) if matchedName and matchedName != resolvedEntity['ENTITY_NAME'] else ''))
-                row.append('\n'.join(dataSourceList))
-                matchData = {}
-                matchData['matchKey'] = matchKey
-                matchData['ruleCode'] = self.getRuleDesc(ruleCode)
-                row.append(colorize_match_data(matchData))
-                row.append(matchScore)
-                row.append('\n'.join(relationshipLines))
-                matchList.append(row)
-
-            if len(matchList) == 0:
-                print()
-                if 'SEARCH_STATISTICS' in jsonResponse:
-
-                    if jsonResponse['SEARCH_STATISTICS'][0]['CANDIDATE_KEYS']['SUMMARY']['FOUND'] > 0:
-                        print('\tOne or more entities were found but did not score high enough to be returned')
-                        print('\tPlease include additional or more complete attributes in your search')
-                    elif jsonResponse['SEARCH_STATISTICS'][0]['CANDIDATE_KEYS']['SUMMARY']['GENERIC'] > 0:
-                        print('\tToo many entities would be returned')
-                        print('\tPlease include additional attributes to narrow the search results')
-                    elif jsonResponse['SEARCH_STATISTICS'][0]['CANDIDATE_KEYS']['SUMMARY']['NOT_FOUND'] > 0:
-                        print('\tNo entities at all were found')
-                        print('\tPlease search by other attributes for this entity if you feel it should exist')
-                    else:
-                        print('\tNo search keys were even generated')
-                        print('\tPlease search by other attributes')
-
-                else:  # older versions do not have statistics
-                    print('\tNo matches found or there were simply too many to return')
-                    print('\tPlease include additional search parameters if you feel this entity is in the database')
-            else:
-
-                # sort the list by match score descending
-                matchList = sorted(matchList, key=lambda x: x[5], reverse=True)
-
-                # store the last search result and colorize
-                self.lastSearchResult = []
-                for i in range(len(matchList)):
-                    self.lastSearchResult.append(matchList[i][1])
-                    matchList[i][0] = colorize(i + 1, 'row_title')
-                    matchList[i][1] = colorize_entity(matchList[i][1])
-                    matchList[i][2] = matchList[i][2]
-                self.renderTable(tblTitle, tblColumns, matchList)
-
-            print('')
 
     # ---------------------------
     def do_get(self, arg, **kwargs):
-        '''
-        \nDisplays a particular entity by entity_id or by data_source and record_id.
-        \n\nSyntax:
-        \n\tget <entity_id>
-        \n\tget <dataSource> <recordID>
-        \n\tget search <search index>
-        \n\tget detail <entity_id>
-        \n\tget detail <dataSource> <recordID>
-        \n\tget features <entity_id>
-        \n\nNotes:
-        \n\tget search is a shortcut to the entity ID at the search index provided. Must be valid for the last search performed.
-        \n\tget detail displays every record for the entity while a get alone displays a summary of the entity by dataSource.
-        \n\tget features displays the mapped and internal derived elements of each feature in the entity\n
-        '''
-
-        if not argCheck('do_get', arg, self.do_get.__doc__):
-            return
-
-        # no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+        if not arg:
+            self.help_get()
+            return -1 if calledDirect else 0
 
         # get possible data source list
         if 'dataSourceFilter' in kwargs and self.current_settings['data_source_suppression'] == 'on':
@@ -1964,15 +2028,20 @@ class G2CmdShell(cmd.Cmd):
         if len(arg.split()) == 2 and arg.split()[0].upper() == 'SEARCH':
             lastToken = arg.split()[1]
             if not lastToken.isdigit() or lastToken == '0' or int(lastToken) > len(self.lastSearchResult):
-                printWithNewLines('Select a valid index from the prior search results to use this command', 'B')
+                print_message('Invalid search index from the prior search', 'error')
                 return -1 if calledDirect else 0
             else:
                 arg = str(self.lastSearchResult[int(lastToken) - 1])
 
         argList = arg.split()
         if len(argList) not in (1, 2):
-            argError(arg, 'incorrect number of parameters')
-            return 0
+            print_message('Incorrect number of parameters', 'warning')
+            return -1 if calledDirect else 0
+
+        if len(argList) == 1 and not argList[0].isnumeric():
+            print_message('Entity ID must be numeric', 'error')
+            return -1 if calledDirect else 0
+
 
         getFlagList = ['G2_ENTITY_INCLUDE_ENTITY_NAME',
                        'G2_ENTITY_INCLUDE_RECORD_DATA',
@@ -1988,6 +2057,7 @@ class G2CmdShell(cmd.Cmd):
             else:
                 resolvedJson = execute_api_call('getEntityByRecordID', getFlagList, argList)
         except Exception as err:
+            print_message(err, 'error')
             return -1 if calledDirect else 0
 
         relatedEntityCount = len(resolvedJson['RELATED_ENTITIES']) if 'RELATED_ENTITIES' in resolvedJson else 0
@@ -2012,6 +2082,8 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': 'Additional Data', 'width': 100, 'align': 'left'})
             reportType = 'detail' if showDetail else 'summary'
             tblTitle = f"Entity {reportType} for entity {colorize_entity(entityID)}: {entityName}"
+            if webapp_url:
+                tblTitle += f"  {colorize('WebApp:', 'dim')} " + colorize(f"{webapp_url}/graph/{entityID}", 'highlight1,underline') 
 
             # summarize by data source
             additionalDataSources = False
@@ -2167,6 +2239,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             jsonData = execute_api_call('getEntityByEntityID', getFlagList, int(entityID))
         except Exception as err:
+            print_message(err, 'error')
             return None
 
         g2_diagnostic_module = G2Diagnostic()
@@ -2238,6 +2311,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             jsonData2 = execute_api_call('getEntityByEntityID', getFlagList, int(entityId))
         except Exception as err:
+            print_message(err, 'error')
             return None
 
         ambiguousEntity = 'AMBIGUOUS_ENTITY' in jsonData2['RESOLVED_ENTITY']['FEATURES']
@@ -2252,22 +2326,24 @@ class G2CmdShell(cmd.Cmd):
         return None
 
     # ---------------------------
+    def help_compare(self):
+        print(textwrap.dedent(f'''\
+
+        Compares a set of entities by placing them side by side in a columnar format.
+
+        {colorize('Syntax:', 'highlight2')}
+            compare <entity_id1> <entity_id2>   {colorize('compares the listed entities', 'dim')}
+            compare search                      {colorize('places all the search results side by side', 'dim')}
+            compare search <top (n)>            {colorize('places the top (n) search results side by side', 'dim')}
+       '''))
+
+
+    # ---------------------------
     def do_compare(self, arg, **kwargs):
-        '''
-        \nCompares a set of entities by placing them side by side in a columnar format.
-        \n\nSyntax:
-        \n\tcompare <entity_id1> <entity_id2>
-        \n\tcompare search
-        \n\tcompare search <top (n)>
-        '''
-
-        if not argCheck('do_compare', arg, self.do_compare.__doc__):
-            return
-
-        showDetail = False  # old flag, replaced by why service which shows interal features
-
-        # no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+        if not arg:
+            self.help_compare()
+            return -1 if calledDirect else 0
 
         # get possible data source list
         if 'dataSourceFilter' in kwargs and self.current_settings['data_source_suppression'] == 'on':
@@ -2275,31 +2351,21 @@ class G2CmdShell(cmd.Cmd):
         else:
             dataSourceFilter = None
 
-        fileName = None
-        if type(arg) == str and 'TO' in arg.upper():
-            fileName = arg[arg.upper().find('TO') + 2:].strip()
-            fileName = arg[:arg.upper().find('TO')].strip()
-
         if type(arg) == str and 'SEARCH' in arg.upper():
             lastToken = arg.split()[len(arg.split()) - 1]
             if lastToken.isdigit():
                 entityList = self.lastSearchResult[:int(lastToken)]
             else:
                 entityList = self.lastSearchResult
+        elif ',' in arg:
+            entityList = arg.split(',')
         else:
-            try:
-                if ',' in arg:
-                    entityList = list(map(int, arg.split(',')))
-                else:
-                    entityList = list(map(int, arg.split()))
-            except:
-                printWithNewLines('error parsing argument [%s] into entity id numbers' % arg, 'S')
-                printWithNewLines('  expected comma or space delimited integers', 'E')
-                return -1 if calledDirect else 0
+            entityList = arg.split()
 
-        if len(entityList) == 0:
-            printWithNewLines('%s contains no valid entities' % arg, 'B')
+        if not all(x.isnumeric() for x in entityList) and not entityList[0].upper() in self.dsrcCodeLookup:
+            print_message('Invalid parameter: expected one or more numeric entity IDs', 'caution')
             return -1 if calledDirect else 0
+
 
         getFlagList = ['G2_ENTITY_INCLUDE_ENTITY_NAME',
                        'G2_ENTITY_INCLUDE_RECORD_DATA',
@@ -2310,10 +2376,12 @@ class G2CmdShell(cmd.Cmd):
                        'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO',
                        'G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY']
         compareList = []
+        entityList = list(set(entityList)) #--ensures a unique set of entities
         for entityId in entityList:
             try:
                 jsonData = execute_api_call('getEntityByEntityID', getFlagList, int(entityId))
             except Exception as err:
+                print_message(err, 'error')
                 return -1 if calledDirect else 0
 
             entityData = {}
@@ -2371,7 +2439,7 @@ class G2CmdShell(cmd.Cmd):
                             entityData['relationshipData'].append(item)
                 if 'OTHER_DATA' in record:
                     for item in record['OTHER_DATA']:
-                        if (showDetail or not self.isInternalAttribute(item)) and item not in entityData['otherData']:
+                        if not self.isInternalAttribute(item) and item not in entityData['otherData']:
                             entityData['otherData'].append(item)
 
             for relatedEntity in jsonData['RELATED_ENTITIES']:
@@ -2379,10 +2447,6 @@ class G2CmdShell(cmd.Cmd):
                     entityData['crossRelations'].append(relatedEntity)  # '%s\n %s\n to %s' % (relatedEntity['MATCH_KEY'][1:], relatedEntity['ERRULE_CODE'], relatedEntity['ENTITY_ID']))
                 else:
                     entityData['otherRelations'].append(relatedEntity)  # {"MATCH_LEVEL": self.relatedMatchLevels[relatedEntity['MATCH_LEVEL']], "MATCH_KEY": relatedEntity['MATCH_KEY'][1:], "ERRULE_CODE": relatedEntity['ERRULE_CODE'], "ENTITY_ID": relatedEntity['ENTITY_ID'], "ENTITY_NAME": relatedEntity['ENTITY_NAME']})
-
-            # let them know these entities are not related to each other
-            # if len(entityData['crossRelations']) == 0:
-            #    entityData['crossRelations'].append('none')
 
             compareList.append(entityData)
 
@@ -2397,12 +2461,6 @@ class G2CmdShell(cmd.Cmd):
                         commonRelation = False
                         if relation1['ENTITY_ID'] == relation2['ENTITY_ID']:
                             commonRelation = True
-                        elif False:  # ability to see if they are bothe related to a billy or a mary (by name) is turned off so ambiguous is more clear
-                            if hasFuzzy:
-                                commonRelation = fuzz.token_set_ratio(relation1['ENTITY_NAME'], relation2['ENTITY_NAME']) >= 90
-                            else:
-                                commonRelation = relation1['ENTITY_NAME'] == relation2['ENTITY_NAME']
-
                         if commonRelation and relation1 not in entityData1['relsInCommon']:
                             entityData1['relsInCommon'].append(relation1)
 
@@ -2451,29 +2509,26 @@ class G2CmdShell(cmd.Cmd):
                 matchData['matchKey'] = relation['MATCH_KEY']
                 matchData['ruleCode'] = self.getRuleDesc(relation['ERRULE_CODE'])
                 matchData['entityId'] = relation['ENTITY_ID']
+                matchData['entityName'] = relation['ENTITY_NAME']
                 commonRelsList.append(colorize_match_data(matchData))
             commonRelsRow.append('\n'.join(commonRelsList))
 
         # initialize table
         columnWidth = 75
-        if False:  # disable adjustment in favor of less last table
-            if len(entityList) <= 1:
-                columnWidth = 100
-            elif len(entityList) <= 3:
-                columnWidth = 75
-            elif len(entityList) <= 4:
-                columnWidth = 50
-            else:
-                columnWidth = 25
 
-        tblTitle = 'Comparison of Listed Entities'
+        tblTitle = 'Comparison of listed entities'
         tblColumns = []
         tblColumns.append({'name': 'Entity ID', 'width': 16, 'align': 'left'})
+        urlRow = []
         for entityId in entityList:
-            tblColumns.append({'name': colorize_entity(str(entityId)), 'width': columnWidth, 'align': 'left'})
+            columnHeader = colorize_entity(str(entityId))
+            tblColumns.append({'name': columnHeader, 'width': columnWidth, 'align': 'left'})
+            if webapp_url:
+                urlRow.append(colorize(f"{webapp_url}/graph/{entityId}", 'highlight1,underline'))
 
         # set the row titles
         rowTitles = {}
+        rowTitles['urlRow'] = 'WebApp url'
         rowTitles['dataSourceRow'] = 'Sources'
         rowTitles['nameDataRow'] = 'Names'
         rowTitles['attributeDataRow'] = 'Attributes'
@@ -2488,6 +2543,8 @@ class G2CmdShell(cmd.Cmd):
 
         # add the data
         tblRows = []
+        if webapp_url:
+            tblRows.append([rowTitles['urlRow']] + urlRow)
         tblRows.append([rowTitles['dataSourceRow']] + dataSourcesRow)
         if len(''.join(crossRelsRow)) > 0:
             tblRows.append([rowTitles['crossRelsRow']] + crossRelsRow)
@@ -2513,27 +2570,39 @@ class G2CmdShell(cmd.Cmd):
         return 0
 
     # ---------------------------
-    def do_tree(self, arg, **kwargs):
-        '''
-        \nDisplays an entity tree from a particular entity\'s point of view
-        \n\nSyntax:
-        \n\ttree <entity_id> degree <n>
-        '''
+    def help_tree(self):
+        print(textwrap.dedent(f'''\
 
-        if not argCheck('do_tree', arg, self.do_tree.__doc__):
-            return
+        Displays an entity tree from a particular entity's point of view.
+
+        {colorize('Syntax:', 'highlight2')}
+            tree <entity_id>                  {colorize('displays the first degree relationships of an entity', 'dim')}
+            tree <entity_id> degree <n>       {colorize('displays relationships of an entity out to <n> degrees', 'dim')}
+            tree <entity_id> degree <n> all   {colorize('adding the "all" tag disables the default limit of 10 per category', 'dim')}
+        '''))
+
+
+    # ---------------------------
+    def do_tree(self, arg, **kwargs):
+        calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+        if not arg:
+            self.help_tree()
+            return -1 if calledDirect else 0
 
         entityId = None
         buildOutDegree = 1
         max_children_display = 10
         argList = arg.split()
-        if len(argList) in (1, 3):
+        if argList[-1].upper() == 'ALL':
+            max_children_display = 999999
+            argList.pop(-1)
+        if len(argList) in (1, 3, 4):
             if argList[0].isdigit():
                 entityId = int(argList[0])
             if len(argList) == 3 and argList[1].upper() == 'DEGREE' and argList[2].isdigit():
                 buildOutDegree = int(argList[2])
         if not entityId:
-            print('\nInvalid syntax\n')
+            print_message('Invalid parameter: expected a numeric entity ID', 'warning')
             return
 
         entityParameter = json.dumps({'ENTITIES': [{'ENTITY_ID': entityId}]})
@@ -2549,6 +2618,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             json_data = execute_api_call('findNetworkByEntityID', getFlagList, [entityParameter, maxDegree, buildOutDegree, maxEntities])
         except Exception as err:
+            print_message(err, 'error')
             return
 
         nodes = {}
@@ -2565,8 +2635,7 @@ class G2CmdShell(cmd.Cmd):
 
             # get next related entity
             entity_id = current_parent_data['RELATED_ENTITY_LIST'][current_parent_data['NEXT_RELATED_ENTITY_I']]
-            current_parent_list[len(current_parent_list) - 1]['NEXT_RELATED_ENTITY_I'] += 1
-
+            current_parent_list[-1]['NEXT_RELATED_ENTITY_I'] += 1
             nodes[entity_id] = {}
             nodes[entity_id]['RELATED_ENTITY_LIST'] = []
 
@@ -2588,8 +2657,8 @@ class G2CmdShell(cmd.Cmd):
             for relationship in entity_data.get('RELATED_ENTITIES', []):
                 related_id = relationship['ENTITY_ID']
 
-                # bypass nodes already rendered in this tree
-                if related_id in current_parent_list[len(current_parent_list) - 1]['PRIOR_ENTITY_LIST']:
+                # bypass nodes already rendered at prior levels
+                if related_id in current_parent_list[-1]['PRIOR_ENTITY_LIST']:
                     continue
 
                 nodes[entity_id]['RELATED_ENTITY_COUNT'] += 1
@@ -2611,19 +2680,22 @@ class G2CmdShell(cmd.Cmd):
                         nodes[entity_id]['DERIVED_RELATION_CATEGORIES'][key] = []
                     nodes[entity_id]['DERIVED_RELATION_CATEGORIES'][key].append(related_id)
 
-            # start a new parent if any children
+            # remove related entities at prior level
+            related_entity_list = []
             if nodes[entity_id]['RELATED_ENTITY_LIST']:
+                for related_id in nodes[entity_id]['RELATED_ENTITY_LIST']:
+                    if related_id not in current_parent_list[-1]['PRIOR_ENTITY_LIST']:
+                        related_entity_list.append(related_id)
+                nodes[entity_id]['RELATED_ENTITY_LIST'] = related_entity_list
 
-                # gather all prior level nodes so don't render twice
-                next_prior_entity_list = []
-                for parent_data in current_parent_list:
-                    next_prior_entity_list += parent_data['RELATED_ENTITY_LIST']
-
-                current_parent_list.append({'NEXT_RELATED_ENTITY_I': 0,
-                                            'RELATED_ENTITY_LIST': nodes[entity_id]['RELATED_ENTITY_LIST'],
-                                            'PRIOR_ENTITY_LIST': next_prior_entity_list})
-
-        # print('----\n', json.dumps(nodes, indent=4), '\n----')
+            # start a new parent if any children left
+            if related_entity_list:
+                current_parent_list.append({'ENTITY_ID': entity_id,
+                                            'NEXT_RELATED_ENTITY_I': 0,
+                                            'RELATED_ENTITY_LIST': related_entity_list,
+                                            'PRIOR_ENTITY_LIST': current_parent_list[-1]['PRIOR_ENTITY_LIST'] + related_entity_list})
+                #print('->', len(current_parent_list), entity_id, current_parent_list[-1])
+        #print('----\n', json.dumps(nodes, indent=4), '\n----')
 
         # create the tree view
         tree_nodes = {}
@@ -2708,7 +2780,7 @@ class G2CmdShell(cmd.Cmd):
         nodeDesc = colorize_entity(nodeId) + ' '
 
         if 'RECORD_SUMMARY' in nodes[nodeId]:
-            nodeDesc += (' | '.join(colorize_dsrc(ds['DATA_SOURCE']) for ds in nodes[nodeId]['RECORD_SUMMARY']) + ' ')
+            nodeDesc += (' | '.join(colorize_dsrc(f"{ds['DATA_SOURCE']} ({ds['RECORD_COUNT']})") for ds in nodes[nodeId]['RECORD_SUMMARY']) + ' ')
 
         if 'ENTITY_NAME' in nodes[nodeId]:
             nodeDesc += (nodes[nodeId]['ENTITY_NAME'])
@@ -2754,33 +2826,37 @@ class G2CmdShell(cmd.Cmd):
         return disclosed_keys, derived_keys
 
     # ---------------------------
+    def help_why(self):
+        print(textwrap.dedent(f'''\
+
+        Shows the interal values and scores used to determine why a set of records resolved or only related.
+
+        {colorize('Syntax:', 'highlight2')}
+            why <entity_id1>                                            {colorize('shows why the records in a single entity resolved together', 'dim')}
+            why <entity_id1> <entity_id2>                               {colorize('shows why two or more different entities did not resolve', 'dim')}
+            why <data_source1> <record_id1> <data_source2> <record_id2> {colorize('shows if the two data source records could resolve or relate', 'dim')}
+
+        {colorize('Color legend:', 'highlight2')}
+            {colorize('green', 'good')} indicates the values matched and contributed to the overall score
+            {colorize('red', 'bad')} indicates the values did not match and hurt the overall score
+            {colorize('yellow', 'caution')} indicates the values did not match but did not hurt the overall score
+            {colorize('cyan', 'highlight2')} indicates the values only helped get the record on the candidate list
+            {colorize('dimmed', 'dim')} values were ignored (see the bracket legend below)
+
+        {colorize('Bracket legend:', 'highlight2')}
+            [99] indicates how many entities share this value
+            [~] indicates that this value was not used to find candidates as too many entities share it
+            [!] indicates that this value was not not even scored as too many entities share it
+            [#] indicates that this value was suppressed in favor of a more complete value\n
+        '''))
+
+
+    # ---------------------------
     def do_why(self, arg):
-        '''
-        \nShows all the internals values for the entities desired in order to explain why they did or did not resolve.
-        \n\nSyntax:
-        \n\twhy <entity_id1>               (shows why the records in the entity resolved together)
-        \n\twhy <entity_id1> <entity_id2>  (shows how the different entities are related and/or why they did not resolve)
-        \n\twhy <data_source1> <record_id1> <data_source2> <record_id2>
-        \n\t                               (compares two data source records, showing how the either could resolve or relate)
-        \n\nColor legend:
-        \n\tgreen indicates the values matched and contributed to the overall score
-        \n\tred indicates the values did not match and hurt the overall score
-        \n\tyellow indicates the values did not match but did not hurt the overall score
-        \n\tcyan indicates the values only helped get the record on the candidate list
-        \n\tdimmed values were ignored (see the bracket legend below)
-        \n\nBracket legend:
-        \n\t[99] indicates how many entities share this value
-        \n\t[~] indicates that this value was not used to find candidates as too many entities share it
-        \n\t[!] indicates that this value was not not even scored as way too many entities share it
-        \n\t[#] indicates that this value was suppressed in favor of a more complete value\n
-        '''
-
-        if type(arg) != list and not argCheck('do_why', arg, self.do_why.__doc__):
-            return
-
-        # no return code if called direct
-        calledFrom = sys._getframe().f_back.f_code.co_name
-        calledDirect = calledFrom != 'onecmd'
+        calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+        if not arg:
+            self.help_why()
+            return -1 if calledDirect else 0
 
         # see if already a list ... it will be if it came from audit
         if type(arg) == list:
@@ -2792,22 +2868,20 @@ class G2CmdShell(cmd.Cmd):
                 oldWhyNot = True
                 arg = arg[0:-4]
 
-            if 'SEARCH' in arg.upper():
+            if type(arg) == str and 'SEARCH' in arg.upper():
                 lastToken = arg.split()[len(arg.split()) - 1]
                 if lastToken.isdigit():
                     entityList = self.lastSearchResult[:int(lastToken)]
                 else:
                     entityList = self.lastSearchResult
+            elif ',' in arg:
+                entityList = arg.split(',')
             else:
-                try:
-                    if ',' in arg:
-                        entityList = arg.split(',')
-                    else:
-                        entityList = arg.split()
-                except:
-                    printWithNewLines('error parsing argument [%s] into entity id numbers' % arg, 'S')
-                    printWithNewLines('  expected comma or space delimited integers', 'E')
-                    return -1 if calledDirect else 0
+                entityList = arg.split()
+
+            if not all(x.isnumeric() for x in entityList) and not entityList[0].upper() in self.dsrcCodeLookup:
+                print_message('Invalid parameter: expected one or more numeric entity IDs', 'caution')
+                return -1 if calledDirect else 0
 
         if len(entityList) == 1:
             whyType = 'whyEntity'
@@ -2815,9 +2889,9 @@ class G2CmdShell(cmd.Cmd):
             firstRowTitle = 'INTERNAL_ID'
             entityData = self.whyEntity(entityList)
 
-        elif len(entityList) == 2 and not oldWhyNot:  # whyEntities() only available in 2.0
+        elif len(entityList) == 2 and not oldWhyNot:
             whyType = 'whyNot1'
-            tblTitle = f"Why not for entities: {', '.join([colorize_entity(i) for i in entityList])}"
+            tblTitle = 'Why not for listed entities'
             firstRowTitle = 'ENTITY_ID'
             entityData = self.whyNot2(entityList)
 
@@ -2829,12 +2903,11 @@ class G2CmdShell(cmd.Cmd):
 
         else:
             whyType = 'whyNot2'
-            tblTitle = f"Why not for entities: {', '.join([colorize_entity(i) for i in entityList])}"
+            tblTitle = 'Why not for listed entities'
             firstRowTitle = 'ENTITY_ID'
             entityData = self.whyNotMany(entityList)
 
         if not entityData:
-            printWithNewLines('No records found!', 'B')
             return -1 if calledDirect else 0
 
         tblColumns = [{'name': colorize(firstRowTitle, 'row_title'), 'width': 50, 'align': 'left'}]
@@ -2921,6 +2994,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             jsonData = execute_api_call('whyEntityByEntityID', whyFlagList, int(entityList[0]))
         except Exception as err:
+            print_message(err, 'error')
             return None
 
         entityData = {}
@@ -2949,6 +3023,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             jsonData = execute_api_call('whyRecords', whyFlagList, [entityList[0], entityList[1], entityList[2], entityList[3]])
         except Exception as err:
+            print_message(err, 'error')
             return None
 
         entityData = {}
@@ -2995,16 +3070,11 @@ class G2CmdShell(cmd.Cmd):
     # ---------------------------
     def whyNot2(self, entityList):
 
-        try:
-            entityList = [int(x) for x in entityList]
-        except:
-            printWithNewLines('Invalid parameters')
-            return None
-
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS']
         try:
             jsonData = execute_api_call('whyEntities', whyFlagList, [int(entityList[0]), int(entityList[1])])
         except Exception as err:
+            print_message(err, 'error')
             return None
 
         entityData = {}
@@ -3057,18 +3127,10 @@ class G2CmdShell(cmd.Cmd):
                         relationship['ruleCode'] = self.getRuleDesc(relatedEntity['ERRULE_CODE'])
                         entityData[thisId]['crossRelations'].append(relationship)
 
-        # if debugOutput:
-        #    showDebug('whyEntity-reporting structure', entityData)
-
         return entityData
 
     # ---------------------------
     def whyNotMany(self, entityList):
-        try:
-            entityList = [int(x) for x in entityList]
-        except:
-            printWithNewLines('Invalid parameters')
-            return None
 
         whyFlagList = ['G2_WHY_ENTITY_DEFAULT_FLAGS',
                        'G2_ENTITY_INCLUDE_RECORD_JSON_DATA']
@@ -3080,6 +3142,7 @@ class G2CmdShell(cmd.Cmd):
             try:
                 jsonData = execute_api_call('whyEntityByEntityID', whyFlagList, int(entityId))
             except Exception as err:
+                print_message(err, 'error')
                 return None
 
             # add the data sources and create search json
@@ -3129,6 +3192,7 @@ class G2CmdShell(cmd.Cmd):
             try:
                 jsonData2 = execute_api_call('getEntityByEntityID', getFlagList, int(entityId))
             except Exception as err:
+                print_message(err, 'error')
                 return
 
             entityData[entityId]['crossRelations'] = []
@@ -3148,6 +3212,7 @@ class G2CmdShell(cmd.Cmd):
             try:
                 jsonData2 = execute_api_call('searchByAttributes', searchFlagList, json.dumps(searchJson))
             except Exception as err:
+                print_message(err, 'error')
                 return
 
             entityData[entityId]['whyKey'] = []
@@ -3268,10 +3333,6 @@ class G2CmdShell(cmd.Cmd):
 
     # ---------------------------
     def whyFormatFeature(self, featureData, whyKey):
-        if len(featureData['featDesc']) > 60:
-            featureData['featDesc'] = featureData['featDesc'][0:57] + '...'
-        if len(featureData.get('matchedFeatDesc', '')) > 60:
-            featureData['matchedFeatDesc'] = featureData['matchedFeatDesc'][0:57] + '...'
 
         featureData['formattedFeatDesc'] = featureData['featDesc'].strip()
         ftypeCode = featureData['ftypeCode']
@@ -3302,8 +3363,7 @@ class G2CmdShell(cmd.Cmd):
 
             # note: addresses may score same tho not exact!
             if featureData['matchLevel'] != 'SAME' or featureData['matchedFeatDesc'] != featureData['featDesc']:
-                featureData['formattedFeatDesc'] += '\n  '
-                featureData['formattedFeatDesc'] += colorize(f"{featureData['matchedFeatDesc']} ({featureData['matchScoreDisplay']})", featureData['featColor'])
+                featureData['formattedFeatDesc'] += '\n' + colorize(f"\u2514\u2500\u2500 {featureData['matchedFeatDesc']} ({featureData['matchScoreDisplay']})", featureData['featColor'])
 
         elif 'matchScore' in featureData:  # must be same and likley a candidate builder
             featureData['sortOrder'] = 1
@@ -3415,7 +3475,6 @@ class G2CmdShell(cmd.Cmd):
                     matchedFeatDesc = featRecord['CANDIDATE_FEAT']
                 elif featRecord['CANDIDATE_FEAT_ID'] in features:
                     # print(entityId, featRecord)
-                    # pause()
                     libFeatId = featRecord['CANDIDATE_FEAT_ID']
                     libFeatDesc = featRecord['CANDIDATE_FEAT']
                     matchedFeatId = featRecord['INBOUND_FEAT_ID']
@@ -3490,12 +3549,12 @@ class G2CmdShell(cmd.Cmd):
 
             Shows shows how the records in a single entity came together.
 
-            {colorize('Syntax:', 'highlight1')}
-                how {entity_id}               (shows a summary of the resolution process)
-                how {entity_id} concise       (shows the matching features as part of the tree view)
-                how {entity_id} formatted     (shows the matching features in a table)
+            {colorize('Syntax:', 'highlight2')}
+                how {entity_id}            {colorize('shows a summary of the resolution process', 'dim')}
+                how {entity_id} concise    {colorize('shows the matching features as part of the tree view', 'dim')}
+                how {entity_id} formatted  {colorize('shows the matching features in a table', 'dim')}
 
-            {colorize('How to read:', 'highlight1')}
+            {colorize('How to read:', 'highlight2')}
                 A how report documents each step of the resoution process for an entity so if
                 an entity has 100s records there will be 100s of steps. Each step will either
                 create a virtual entity, add to it or combine it with other virtual entities
@@ -3513,15 +3572,11 @@ class G2CmdShell(cmd.Cmd):
                         {colorize('(the -S number after the virtual entity ID is the step number that updated it.  Try', 'italics')}
                             {colorize('searching for just the V number before the dash to find all steps that include it.)', 'italics')}
                     - any other string such as a match_key, principle code, specific name, address, etc
-
              '''))
 
     # ---------------------------
     def do_how(self, arg):
-
-        # no return code if called direct
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
-
         if not arg:
             self.help_how()
             return -1 if calledDirect else 0
@@ -3535,8 +3590,7 @@ class G2CmdShell(cmd.Cmd):
         try:
             entity_id = int(arg)
         except:
-            print(f'\n invalid syntax: {arg} \n')
-            self.help_how()
+            print_message('Invalid parameter: expected a numeric entity ID', 'warning')
             return -1 if calledDirect else 0
 
         # do get first
@@ -3544,9 +3598,11 @@ class G2CmdShell(cmd.Cmd):
                        'G2_ENTITY_INCLUDE_ALL_FEATURES',
                        'G2_ENTITY_OPTION_INCLUDE_FEATURE_STATS',
                        'G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS']
+        
         try:
             getEntityData = execute_api_call('getEntityByEntityID', getFlagList, int(entity_id))
         except Exception as err:
+            print_message(err, 'error')
             return -1 if calledDirect else 0
 
         stat_pack = {'steps': {}, 'features': {}, 'rules': {}, 'ftype_counter': {}, 'rule_counter': {}}
@@ -3589,8 +3645,9 @@ class G2CmdShell(cmd.Cmd):
 
         howFlagList = ['G2_HOW_ENTITY_DEFAULT_FLAGS']
         try:
-            jsonData = execute_api_call('howEntityByEntityID', howFlagList, int(entity_id))
+            json_data = execute_api_call('howEntityByEntityID', howFlagList, int(entity_id))
         except Exception as err:
+            print_message(err, 'error')
             return -1 if calledDirect else 0
 
         entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
@@ -4086,9 +4143,9 @@ class G2CmdShell(cmd.Cmd):
                 self.currentRenderString = how_header + ('\nFiltered for ' + colorize(filter_str, 'fg_white,bg_red') + '\n' if filter_str else '') + '\n' + how_report
 
             if filter_str:
-                self.do_scroll(search=filter_str)
+                self.showTable(search=filter_str)
             else:
-                self.do_scroll('auto')
+                self.showTable('auto')
 
             reply = input(colorize_prompt('\nSelect (O)verview, (C)oncise view, (F)ormatted view, (S)earch or (Q)uit ... '))
             if reply:
@@ -4193,26 +4250,36 @@ class G2CmdShell(cmd.Cmd):
         return stat + ' ' + colorize('(' + str(cnt) + ')', 'highlight2')
 
     # ---------------------------
-    def do_score(self, arg):
-        '''
-        \nCompares any two features and shows the scores returned.\n
-        \nSyntax:
-        \n\tscore [{"name_last": "Smith", "name_first": "Joseph"}, {"name_last": "Smith", "name_first": "Joe"}]
-        \n\tscore [{"addr_full": "111 First St, Anytown, USA"}, {"addr_full": "111 First Street, Anytown"}]
-        \n\tscore [{"passport_number": "1231234", "passport_country": "US"}, {"passport_number": "1231234", "passport_country": "USA"}]
-        '''
+    def help_score(self):
+        print(textwrap.dedent(f'''\
 
-        if not argCheck('do_score', arg, self.do_score.__doc__):
+        Compares any two features and shows the scores returned.
+
+        {colorize('Syntax:', 'highlight2')}
+            score [{'{'}"name_last": "Smith", "name_first": "Joseph"{'}'}, {'{'}"name_last": "Smith", "name_first": "Joe"{'}'}]
+            score [{'{'}"addr_full": "111 First St, Anytown, USA"{'}'}, {'{'}"addr_full": "111 First Street, Anytown"{'}'}]
+            score [{'{'}"passport_number": "1231234", "passport_country": "US"{'}'}, {'{'}"passport_number": "1231234", "passport_country": "USA"{'}'}]
+        '''))
+
+
+    # ---------------------------
+    def do_score(self, arg):
+        if not arg:
+            self.help_score()
             return
 
-        # see if they gave us json
         try:
             jsonData = json.loads(arg)
-            record1json = dictKeysUpper(jsonData[0])
-            record2json = dictKeysUpper(jsonData[1])
-        except:
-            print('json parameters are invalid, see example in help')
+        except (ValueError, KeyError) as err:
+            print_message(f"Invalid json parameter: {err}", 'error')
             return
+
+        if type(jsonData) != list or len(jsonData) != 2:
+            print_message(f"json parameter must be a list of two features to compare", 'error')
+            return
+
+        record1json = dictKeysUpper(jsonData[0])
+        record2json = dictKeysUpper(jsonData[1])
 
         # use the test data source and entity type
         record1json['TRUSTED_ID_NUMBER'] = 'SCORE_TEST'
@@ -4233,7 +4300,7 @@ class G2CmdShell(cmd.Cmd):
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_1')
             retcode = g2Engine.deleteRecord('TEST', 'SCORE_RECORD_2')
         except G2Exception as err:
-            print(str(err))
+            print_message(err, 'error')
             return
 
         return
@@ -4306,18 +4373,14 @@ class G2CmdShell(cmd.Cmd):
             if self.currentReviewList:
                 self.currentRenderString = colorize(self.currentReviewList, 'bold') + '\n\n' + self.currentRenderString
             print('')
-            self.do_scroll('auto')
+            self.showTable('auto')
             print('')
         return
 
     # ---------------------------
-    def do_scroll(self, arg=None, **kwargs):
-        '''
-        \nLoads the last table rendered into the linux less viewer where you can use the arrow keys to scroll
-        \n up and down, left and right, until you type Q to quit.\n
-        '''
-
-        search = kwargs.get('search')
+    def showTable(self, arg=None, **kwargs):
+        if not self.currentRenderString:
+            return
 
         # note: the F allows less to auto quit if output fits on screen
         #  if they purposely went into scroll mode, we should not auto-quit!
@@ -4325,6 +4388,9 @@ class G2CmdShell(cmd.Cmd):
             lessOptions = '-FMXSR'
         else:
             lessOptions = '-MXSR'
+
+        #--start with a search
+        search = kwargs.get('search')
         if search:
             lessOptions + ' /' + search
 
@@ -4338,19 +4404,24 @@ class G2CmdShell(cmd.Cmd):
         less.wait()
 
     # ---------------------------
+    def help_export(self):
+        print(textwrap.dedent(f'''\
+
+        Exports the json records that make up the selected entities for debugging, reloading, etc.
+
+        {colorize('Syntax:', 'highlight2')}
+            export <entity_id>, <entity_id> degree <n> to <fileName> additive
+            export search to <fileName>
+            export search <search index> to <fileName>\n
+        '''))
+
+
+    # ---------------------------
     def do_export(self, arg):
-        '''
-        \nExports the json records that make up the selected entities for debugging, reloading, etc.
-        \n\nSyntax:
-        \n\texport <entity_id>, <entity_id> degree <n> to <fileName> additive
-        \n\texport search to <fileName>
-        \n\texport search <search index> to <fileName>\n
-        '''
-
-        if not argCheck('do_export', arg, self.do_export.__doc__):
-            return
-
-        print()
+        calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+        if not arg:
+            self.help_export()
+            return -1 if calledDirect else 0
 
         entityList = []
         fileName = None
@@ -4371,7 +4442,7 @@ class G2CmdShell(cmd.Cmd):
             elif thisToken == 'SEARCH':
                 if nextToken.isdigit():
                     if int(nextToken) > len(self.lastSearchResult):
-                        print('\n-invalid last search index\n')
+                        print_message('Invalid search index', 'error')
                         return -1 if calledDirect else 0
                     else:
                         entityList.append(self.lastSearchResult[int(lastToken) - 1])
@@ -4388,11 +4459,11 @@ class G2CmdShell(cmd.Cmd):
             elif thisToken.isdigit():
                 entityList.append(int(thisToken))
             else:
-                print(f'-unknown command token: {thisToken}')
+                print_message(f"unknown command token: {thisToken}", 'warning')
             i += 1
 
         if not entityList:
-            print('no entities selected!\n')
+            print_message('No entities found', 'warning')
             return
 
         if not fileName:
@@ -4400,11 +4471,10 @@ class G2CmdShell(cmd.Cmd):
                 fileName = str(entityList[0]) + '.json'
             else:
                 fileName = 'records.json'
-
         try:
             f = open(fileName, 'a' if additive else 'w')
         except IOError as err:
-            print('cannot write to %s\n\t- %s' % (fileName, err))
+            print_message(err, 'error')
             return
 
         getFlagList = ['G2_ENTITY_INCLUDE_RECORD_DATA',
@@ -4424,6 +4494,7 @@ class G2CmdShell(cmd.Cmd):
                 try:
                     jsonData = execute_api_call('getEntityByEntityID', getFlagList, int(entityId))
                 except Exception as err:
+                    print_message(err, 'error')
                     return
 
                 for recordData in jsonData['RESOLVED_ENTITY']['RECORDS']:
@@ -4444,7 +4515,7 @@ class G2CmdShell(cmd.Cmd):
 
         f.close
 
-        print(f'{recordCount} records written to {fileName}\n')
+        print_message(f"{recordCount} records written to {fileName}", 'success')
 
     # ---------------------------
     def getRuleDesc(self, erruleCode):
@@ -4461,15 +4532,6 @@ class G2CmdShell(cmd.Cmd):
             else:
                 recordList.append(self.cfgData['G2_CONFIG'][table][i])
         return recordList
-
-    # ---------------------------
-    def xx_listAttributes(self, arg):  # disabled
-        '\n\tlistAttributes\n'
-
-        print('')
-        for attrRecord in sorted(self.getConfigData('CFG_ATTR'), key=lambda k: k['ATTR_ID']):
-            print(self.getAttributeJson(attrRecord))
-        print('')
 
     # ---------------------------
     def getAttributeJson(self, attributeRecord):
@@ -4528,50 +4590,12 @@ def showDebug(call, output=''):
 
 
 # --------------------------------------
-def pause(question='PRESS ENTER TO CONTINUE ...'):
-    """ pause for debug purposes """
-    try:
-        input(question)
-    except KeyboardInterrupt:
-        global shutDown
-        shutDown = True
-    except:
-        pass
-
-
-def argCheck(func, arg, docstring):
-
-    if len(arg.strip()) == 0:
-        print('\nMissing argument(s) for %s, command syntax: %s \n' % (func, '\n\n' + docstring[1:]))
-        return False
-    else:
-        return True
-
-
-def argError(errorArg, error):
-
-    printWithNewLines('Incorrect argument(s) or error parsing argument: %s' % errorArg, 'S')
-    printWithNewLines('Error: %s' % error, 'E')
-
-
 def fmtStatistic(amt):
     amt = int(amt)
     if amt > 1000000:
         return "{:,.2f}m".format(round(amt / 1000000, 2))
     else:
         return "{:,}".format(amt)
-
-
-def pad(val, len):
-    if type(val) != str:
-        val = str(val)
-    return (val + (' ' * len))[:len]
-
-
-def lpad(val, len):
-    if type(val) != str:
-        val = str(val)
-    return ((' ' * len) + val)[-len:]
 
 
 def printWithNewLines(ln, pos=''):
@@ -4587,22 +4611,12 @@ def printWithNewLines(ln, pos=''):
         print(ln)
 
 
+# --------------------------------------
 def dictKeysUpper(dict):
     return {k.upper(): v for k, v in dict.items()}
 
 
-def showMeTheThings(data, loc=''):
-    printWithNewLines('<---- DEBUG')
-    printWithNewLines('Func: %s' % sys._getframe(1).f_code.co_name)
-    if loc != '':
-        printWithNewLines('Where: %s' % loc)
-    if type(data) == list:
-        printWithNewLines(('[%s]\n' * len(data)) % tuple(data))
-    else:
-        printWithNewLines('Data: %s' % str(data))
-    printWithNewLines('---->', 'E')
-
-
+# --------------------------------------
 def removeFromHistory(idx=0):
     if readline:
         if not idx:
@@ -4610,42 +4624,17 @@ def removeFromHistory(idx=0):
         readline.remove_history_item(idx)
 
 
+# --------------------------------------
 def _append_slash_if_dir(p):
     if p and os.path.isdir(p) and p[-1] != os.sep:
         return p + os.sep
     else:
         return p
 
-
-def fuzzyCompare(ftypeCode, cfuncCode, str1, str2):
-
-    if hasFuzzy and cfuncCode:
-        if cfuncCode in ('GNR_COMP', 'BT_NAME_COMP', 'ADDR_COMP', 'GROUP_ASSOCIATION_COMP'):
-            closeEnough = fuzz.token_set_ratio(str1, str2) >= 80
-        elif cfuncCode in ('DOB_COMP'):
-            if len(str1) == len(str2):
-                closeEnough = fuzz.token_set_ratio(str1, str2) >= 90
-            else:
-                closeEnough = str1[0:max(len(str1), len(str2))] == str2[0:max(len(str1), len(str2))]
-        elif cfuncCode in ('SSN_COMP'):
-            closeEnough = fuzz.token_set_ratio(str1, str2) >= 90
-        elif cfuncCode in ('ID_COMP'):
-            closeEnough = fuzz.ratio(str1, str2) >= 90
-        elif cfuncCode in ('PHONE_COMP'):
-            closeEnough = str1[-7:] == str2[-7:]
-            # closeEnough = ''.join(i for 1 in str1 if i.isdigit())[-7:] == ''.join(i for i in str2 if i.isdigit())[-7:]
-        else:
-            closeEnough = str1 == str2
-    else:
-            closeEnough = str1 == str2
-    return closeEnough
-
-
-# ===== The main function =====
+# --------------------------------------
 if __name__ == '__main__':
     appPath = os.path.dirname(os.path.abspath(sys.argv[0]))
 
-    # defaults
     try:
         iniFileName = G2Paths.get_G2Module_ini_path()
     except:
@@ -4656,6 +4645,7 @@ if __name__ == '__main__':
     argParser.add_argument('-c', '--config_file_name', dest='ini_file_name', default=iniFileName, help='name of the g2.ini file, defaults to %s' % iniFileName)
     argParser.add_argument('-s', '--snapshot_json_file', dest='snapshot_file_name', default=None, help='the name of a json statistics file computed by G2Snapshot.py')
     argParser.add_argument('-a', '--audit_json_file', dest='audit_file_name', default=None, help='the name of a json statistics file computed by G2Audit.py')
+    argParser.add_argument('-w', '--webapp_url', dest='webapp_url', default=None, help='the url to the senzing webapp if available')
     argParser.add_argument('-D', '--debug_output', dest='debug_output', default=None, help='print raw api json to screen or <filename.txt>')
     argParser.add_argument('-H', '--histDisable', dest='histDisable', action='store_true', default=False, help='disable history file usage')
 
@@ -4663,22 +4653,23 @@ if __name__ == '__main__':
     iniFileName = args.ini_file_name
     snapshotFileName = args.snapshot_file_name
     auditFileName = args.audit_file_name
+    webapp_url = args.webapp_url
     debugOutput = args.debug_output
     hist_disable = args.histDisable
 
     # validate snapshot file if specified
     if snapshotFileName and not os.path.exists(snapshotFileName):
-        print('\nSnapshot file %s not found\n' % snapshotFileName)
+        print_message('Snapshot file not found', 'error')
         sys.exit(1)
 
     # validate audit file if specified
     if auditFileName and not os.path.exists(auditFileName):
-        print('\nAudit file %s not found\n' % auditFileName)
+        print_message('Audit file not found', 'error')
         sys.exit(1)
 
     # get parameters from ini file
     if not os.path.exists(iniFileName):
-        print('\nAn ini file was not found, please supply with the -c parameter\n')
+        print_message('n ini file was not found, please supply with the -c parameter', 'error')
         sys.exit(1)
 
     splash = colorize('\n  ____|  __ \\     \\    \n', 'DIM')
@@ -4694,7 +4685,7 @@ if __name__ == '__main__':
         api_version = json.loads(g2Product.version())
         api_version_major = int(api_version['VERSION'][0:1])
     except G2Exception as err:
-        print(f"\n{err}\n")
+        print_message(err, 'error')
         sys.exit(1)
 
     # try to initialize the g2engine
@@ -4707,7 +4698,7 @@ if __name__ == '__main__':
         else:
             g2Engine.initV2('G2Explorer', iniParams, False)
     except Exception as err:
-        print(f"\n{err}\n")
+        print_message(err, 'error')
         sys.exit(1)
 
     # get needed config data
@@ -4724,15 +4715,11 @@ if __name__ == '__main__':
         cfgData = json.loads(defaultConfigDoc.decode())
         g2ConfigMgr.destroy()
     except Exception as err:
-        print(f"\n{err}\n")
+        print_message(err, 'error')
         sys.exit(1)
     g2ConfigMgr.destroy()
 
-    # cmdloop()
     G2CmdShell().cmdloop()
-    print('')
 
-    # cleanups
     g2Engine.destroy()
-
     sys.exit()
