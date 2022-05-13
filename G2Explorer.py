@@ -4694,9 +4694,9 @@ if __name__ == '__main__':
         iniParamCreator = G2IniParams()
         iniParams = iniParamCreator.getJsonINIParams(iniFileName)
         if api_version_major > 2:
-            g2Engine.init('G2Explorer', iniParams, False)
+            g2Engine.init('pyG2Explorer', iniParams, False)
         else:
-            g2Engine.initV2('G2Explorer', iniParams, False)
+            g2Engine.initV2('pyG2Explorer', iniParams, False)
     except Exception as err:
         print_message(err, 'error')
         sys.exit(1)
