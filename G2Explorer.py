@@ -35,7 +35,8 @@ except:
 try:
     import G2Paths
     from G2Database import G2Database
-    from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2IniParams, G2Product
+    from G2IniParams import G2IniParams
+    from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product
 except:
 
     # Fall back to pre-Senzing-Python-SDK style of imports.
