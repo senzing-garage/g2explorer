@@ -4693,7 +4693,7 @@ if __name__ == '__main__':
     try:
         g2Engine = G2Engine()
         iniParamCreator = G2IniParams()
-        iniParams = iniParamCreator.getJsonINIParams(iniFileName)
+        iniParams = os.getenv("SENZING_ENGINE_CONFIGURATION_JSON", iniParamCreator.getJsonINIParams(iniFileName))
         if api_version_major > 2:
             g2Engine.init('pyG2Explorer', iniParams, False)
         else:
