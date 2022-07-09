@@ -34,10 +34,12 @@ except:
 # Import from Senzing
 try:
     import G2Paths
-    from G2Database import G2Database
-    from G2IniParams import G2IniParams
-    from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product
-except:
+    try:
+        from G2IniParams import G2IniParams
+        from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product
+    except:
+        from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product, G2IniParams
+except Exception as err:
 
     # Fall back to pre-Senzing-Python-SDK style of imports.
     try:
@@ -50,7 +52,7 @@ except:
         from G2Engine import G2Engine
         from G2Exception import G2Exception
     except:
-        print('\nPlease export PYTHONPATH=<path to senzing python directory>\n')
+        print(f"\nCould not import Senzing modules:\n{err}\n")
         sys.exit(1)
 
 # ---------------------------
