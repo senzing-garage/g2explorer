@@ -2021,21 +2021,18 @@ class G2CmdShell(cmd.Cmd):
         showDetail = False
         showFeatures = False
         showAll = False
-        remove_tokens = []
+        new_tokens = []
         arg_tokens = arg.split()
         for token in arg_tokens:
             if token.upper() == 'DETAIL':
                 showDetail = True
-                remove_tokens.append(token)
-            if token.upper().startswith('FEATURE'):
+            elif token.upper().startswith('FEATURE'):
                 showFeatures = True
-                remove_tokens.append(token)
-            if token.upper() == 'ALL':
+            elif token.upper() == 'ALL':
                 showAll = True
-                remove_tokens.append(token)
-        for token in remove_tokens:
-            arg_tokens.remove(token)
-        arg = ' '.join(arg_tokens)
+            else:
+                new_tokens.append(token)
+        arg = ' '.join(new_tokens)
 
         if len(arg.split()) == 2 and arg.split()[0].upper() == 'SEARCH':
             lastToken = arg.split()[1]
