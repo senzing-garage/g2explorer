@@ -2000,6 +2000,8 @@ class G2CmdShell(cmd.Cmd):
             get detail <entity_id>        {colorize('adding the "detail" tag displays each record rather than a summary by data source', 'dim')}
             get features <entity_id>      {colorize('adding the "features" tag displays the entity features rather than the resume', 'dim')}
 
+        {colorize('Notes:', 'highlight2')}
+            {colorize('Add the keyword ', 'dim')}ALL{colorize(' to display all the attributes of the entity if there are more than 50.', 'dim')}
         '''))
 
 
@@ -2016,17 +2018,24 @@ class G2CmdShell(cmd.Cmd):
         else:
             dataSourceFilter = None
 
-        if 'DETAIL ' in arg.upper():
-            showDetail = True
-            arg = arg.upper().replace('DETAIL ', '')
-        else:
-            showDetail = False
-
-        if 'FEATURES ' in arg.upper():
-            showFeatures = True
-            arg = arg.upper().replace('FEATURES ', '')
-        else:
-            showFeatures = False
+        showDetail = False
+        showFeatures = False
+        showAll = False
+        remove_tokens = []
+        arg_tokens = arg.split()
+        for token in arg_tokens:
+            if token.upper() == 'DETAIL':
+                showDetail = True
+                remove_tokens.append(token)
+            if token.upper().startswith('FEATURE'):
+                showFeatures = True
+                remove_tokens.append(token)
+            if token.upper() == 'ALL':
+                showAll = True
+                remove_tokens.append(token)
+        for token in remove_tokens:
+            arg_tokens.remove(token)
+        arg = ' '.join(arg_tokens)
 
         if len(arg.split()) == 2 and arg.split()[0].upper() == 'SEARCH':
             lastToken = arg.split()[1]
@@ -2104,7 +2113,7 @@ class G2CmdShell(cmd.Cmd):
                 # summarize by data source
                 for dataSource in sorted(dataSources):
                     if dataSources[dataSource]:
-                        recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType)
+                        recordData, entityData, otherData = self.formatRecords(dataSources[dataSource], reportType, showAll)
                         row = [recordData, entityData, otherData]
                     else:
                         row = [dataSource, ' ** suppressed ** ', '']
@@ -2117,7 +2126,7 @@ class G2CmdShell(cmd.Cmd):
                     if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
                         additionalDataSources = True
                         continue
-                    recordData, entityData, otherData = self.formatRecords(record, 'entityDetail')
+                    recordData, entityData, otherData = self.formatRecords(record, reportType, showAll)
                     row = [recordData, entityData, otherData]
                     recordList.append(row)
 
@@ -2169,7 +2178,7 @@ class G2CmdShell(cmd.Cmd):
         return 0
 
     # ---------------------------
-    def formatRecords(self, recordList, reportType):
+    def formatRecords(self, recordList, reportType, showAll):
         dataSource = 'unknown'
         recordIdList = []
         primaryNameList = []
@@ -2191,8 +2200,6 @@ class G2CmdShell(cmd.Cmd):
                     matchData['matchKey'] = record['MATCH_KEY']
                     matchData['ruleCode'] = self.getRuleDesc(record['ERRULE_CODE'])
                     recordIdData += '\n' + colorize_match_data(matchData)
-                if record['ERRULE_CODE']:
-                    recordIdData += '\n  ' + colorize(self.getRuleDesc(record['ERRULE_CODE']), 'dim')
             recordIdList.append(recordIdData)
 
             for item in record['NAME_DATA']:
@@ -2216,10 +2223,10 @@ class G2CmdShell(cmd.Cmd):
         entityDataList = list(set(primaryNameList)) + list(set(otherNameList)) + sorted(set(attributeList)) + sorted(set(identifierList)) + list(set(addressList)) + list(set(phoneList))
         otherDataList = sorted(set(otherList))
 
-        if reportType == 'detail':
-            columnHeightLimit = 1000
+        if showAll:
+            columnHeightLimit = 999999
         else:
-            columnHeightLimit = 20
+            columnHeightLimit = 50
 
         recordData = '\n'.join(recordDataList[:columnHeightLimit])
         if len(recordDataList) > columnHeightLimit:
@@ -2594,7 +2601,7 @@ class G2CmdShell(cmd.Cmd):
 
         entityId = None
         buildOutDegree = 1
-        max_children_display = 10
+        max_children_display = 25
         argList = arg.split()
         if argList[-1].upper() == 'ALL':
             max_children_display = 999999
