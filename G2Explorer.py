@@ -2021,9 +2021,8 @@ class G2CmdShell(cmd.Cmd):
         showDetail = False
         showFeatures = False
         showAll = False
-        new_tokens = []
-        arg_tokens = arg.split()
-        for token in arg_tokens:
+        arg_tokens = []
+        for token in arg.split():
             if token.upper() == 'DETAIL':
                 showDetail = True
             elif token.upper().startswith('FEATURE'):
@@ -2031,23 +2030,21 @@ class G2CmdShell(cmd.Cmd):
             elif token.upper() == 'ALL':
                 showAll = True
             else:
-                new_tokens.append(token)
-        arg = ' '.join(new_tokens)
+                arg_tokens.append(token)
 
-        if len(arg.split()) == 2 and arg.split()[0].upper() == 'SEARCH':
-            lastToken = arg.split()[1]
+        if len(arg_tokens) == 2 and arg_tokens[0].upper() == 'SEARCH':
+            lastToken = arg_tokens[1]
             if not lastToken.isdigit() or lastToken == '0' or int(lastToken) > len(self.lastSearchResult):
                 print_message('Invalid search index from the prior search', 'error')
                 return -1 if calledDirect else 0
             else:
-                arg = str(self.lastSearchResult[int(lastToken) - 1])
+                arg_tokens = [str(self.lastSearchResult[int(lastToken) - 1])]
 
-        argList = arg.split()
-        if len(argList) not in (1, 2):
+        if len(arg_tokens) not in (1, 2):
             print_message('Incorrect number of parameters', 'warning')
             return -1 if calledDirect else 0
 
-        if len(argList) == 1 and not argList[0].isnumeric():
+        if len(arg_tokens) == 1 and not arg_tokens[0].isnumeric():
             print_message('Entity ID must be numeric', 'error')
             return -1 if calledDirect else 0
 
@@ -2061,10 +2058,10 @@ class G2CmdShell(cmd.Cmd):
                        'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO',
                        'G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY']
         try:
-            if len(argList) == 1:
-                resolvedJson = execute_api_call('getEntityByEntityID', getFlagList, int(argList[0]))
+            if len(arg_tokens) == 1:
+                resolvedJson = execute_api_call('getEntityByEntityID', getFlagList, int(arg_tokens[0]))
             else:
-                resolvedJson = execute_api_call('getEntityByRecordID', getFlagList, argList)
+                resolvedJson = execute_api_call('getEntityByRecordID', getFlagList, arg_tokens)
         except Exception as err:
             print_message(err, 'error')
             return -1 if calledDirect else 0
