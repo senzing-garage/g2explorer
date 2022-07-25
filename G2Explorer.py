@@ -4646,7 +4646,7 @@ if __name__ == '__main__':
 
     # capture the command line arguments
     argParser = argparse.ArgumentParser()
-    argParser.add_argument('-c', '--config_file_name', dest='ini_file_name', default=iniFileName, help='name of the g2.ini file, defaults to %s' % iniFileName)
+    argParser.add_argument('-c', '--config_file_name', dest='ini_file_name', default=None, help='name of the g2.ini file, defaults to %s' % iniFileName)
     argParser.add_argument('-s', '--snapshot_json_file', dest='snapshot_file_name', default=None, help='the name of a json statistics file computed by G2Snapshot.py')
     argParser.add_argument('-a', '--audit_json_file', dest='audit_file_name', default=None, help='the name of a json statistics file computed by G2Audit.py')
     argParser.add_argument('-w', '--webapp_url', dest='webapp_url', default=None, help='the url to the senzing webapp if available')
@@ -4654,7 +4654,6 @@ if __name__ == '__main__':
     argParser.add_argument('-H', '--histDisable', dest='histDisable', action='store_true', default=False, help='disable history file usage')
 
     args = argParser.parse_args()
-    iniFileName = args.ini_file_name
     snapshotFileName = args.snapshot_file_name
     auditFileName = args.audit_file_name
     webapp_url = args.webapp_url
@@ -4696,7 +4695,20 @@ if __name__ == '__main__':
     try:
         g2Engine = G2Engine()
         iniParamCreator = G2IniParams()
-        iniParams = os.getenv("SENZING_ENGINE_CONFIGURATION_JSON", iniParamCreator.getJsonINIParams(iniFileName))
+
+        if args.ini_file_name:
+
+            iniParams = iniParamCreator.getJsonINIParams(args.ini_file_name)
+
+        elif os.getenv("SENZING_ENGINE_CONFIGURATION_JSON"):
+
+            iniParams = os.getenv("SENZING_ENGINE_CONFIGURATION_JSON")
+
+        else:
+
+            iniParams = iniParamCreator.getJsonINIParams(iniFileName)
+
+        
         if api_version_major > 2:
             g2Engine.init('pyG2Explorer', iniParams, False)
         else:
