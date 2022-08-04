@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support for `SENZING_ENGINE_CONFIGURATION_JSON`
 - Support for `ALL`
+
+### Changed in 2.1.0
+
 - Improve backward compatiblity
 
 ## [2.1.1] - 2022-06-08
