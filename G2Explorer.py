@@ -6,6 +6,7 @@ import csv
 import glob
 import json
 import os
+import pathlib
 import re
 import sys
 import textwrap
@@ -4639,14 +4640,9 @@ def _append_slash_if_dir(p):
 if __name__ == '__main__':
     appPath = os.path.dirname(os.path.abspath(sys.argv[0]))
 
-    try:
-        iniFileName = G2Paths.get_G2Module_ini_path()
-    except:
-        iniFileName = ''
-
     # capture the command line arguments
     argParser = argparse.ArgumentParser()
-    argParser.add_argument('-c', '--config_file_name', dest='ini_file_name', default=None, help='name of the g2.ini file, defaults to %s' % iniFileName)
+    argParser.add_argument('-c', '--config_file_name', dest='ini_file_name', default=None, help='Path and name of optional G2Module.ini file to use.')
     argParser.add_argument('-s', '--snapshot_json_file', dest='snapshot_file_name', default=None, help='the name of a json statistics file computed by G2Snapshot.py')
     argParser.add_argument('-a', '--audit_json_file', dest='audit_file_name', default=None, help='the name of a json statistics file computed by G2Audit.py')
     argParser.add_argument('-w', '--webapp_url', dest='webapp_url', default=None, help='the url to the senzing webapp if available')
@@ -4670,11 +4666,6 @@ if __name__ == '__main__':
         print_message('Audit file not found', 'error')
         sys.exit(1)
 
-    # get parameters from ini file
-    if not os.path.exists(iniFileName):
-        print_message('n ini file was not found, please supply with the -c parameter', 'error')
-        sys.exit(1)
-
     splash = colorize('\n  ____|  __ \\     \\    \n', 'DIM')
     splash += colorize('  __|    |   |   _ \\   ', 'DIM') + 'Senzing G2\n'
     splash += colorize('  |      |   |  ___ \\  ', 'DIM') + 'Exploratory Data Analysis\n'
@@ -4691,23 +4682,25 @@ if __name__ == '__main__':
         print_message(err, 'error')
         sys.exit(1)
 
+    #Check if INI file or env var is specified, otherwise use default INI file
+    ini_file_name = None
+
+    if args.ini_file_name:
+        ini_file_name = pathlib.Path(args.ini_file_name)
+    elif os.getenv("SENZING_ENGINE_CONFIGURATION_JSON"):
+        iniParams = os.getenv("SENZING_ENGINE_CONFIGURATION_JSON")
+    else:
+        ini_file_name = pathlib.Path(G2Paths.get_G2Module_ini_path())
+
+    if ini_file_name:
+        G2Paths.check_file_exists_and_readable(ini_file_name)
+        ini_param_creator = G2IniParams()
+        iniParams = ini_param_creator.getJsonINIParams(ini_file_name)
+
+
     # try to initialize the g2engine
     try:
         g2Engine = G2Engine()
-        iniParamCreator = G2IniParams()
-
-        if args.ini_file_name:
-
-            iniParams = iniParamCreator.getJsonINIParams(args.ini_file_name)
-
-        elif os.getenv("SENZING_ENGINE_CONFIGURATION_JSON"):
-
-            iniParams = os.getenv("SENZING_ENGINE_CONFIGURATION_JSON")
-
-        else:
-
-            iniParams = iniParamCreator.getJsonINIParams(iniFileName)
-
         
         if api_version_major > 2:
             g2Engine.init('pyG2Explorer', iniParams, False)
