@@ -4287,8 +4287,8 @@ class G2CmdShell(cmd.Cmd):
         record2json = dictKeysUpper(jsonData[1])
 
         # use the test data source and entity type
-        record1json['TRUSTED_ID_NUMBER'] = 'SCORE_TEST'
-        record2json['TRUSTED_ID_NUMBER'] = 'SCORE_TEST'
+        record1json['RECORD_TYPE'] = 'SCORE_TEST'
+        record2json['RECORD_TYPE'] = 'SCORE_TEST'
 
         # add the records
         try:
