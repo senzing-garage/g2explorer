@@ -13,7 +13,6 @@ import textwrap
 import logging
 import traceback
 from collections import OrderedDict
-import configparser
 import subprocess
 import readline
 import atexit
@@ -631,7 +630,7 @@ class G2CmdShell(cmd.Cmd):
                 get {colorize('- get an entity by entity ID or record_id.', 'dim')}
                 compare {colorize('- place two or more entities side by side for easier comparison.', 'dim')}
                 how {colorize('- get a step by step replay of how an entity came together.', 'dim')}
-                why {colorize('- see why two entities or two records did not resolve.', 'dim')}
+                why {colorize('- see why entities or records either did or did not resolve.', 'dim')}
                 tree {colorize("- see a tree view of an entity's relationships through 1 or 2 degrees.", 'dim')}
                 export {colorize("- export the json records for an entity for debugging or correcting and reloading.", 'dim')}
 
@@ -3676,14 +3675,14 @@ class G2CmdShell(cmd.Cmd):
                 A how report documents each step of the resoution process for an entity so if
                 an entity has 100s records there will be 100s of steps. Each step will either
                 create a virtual entity, add to it or combine it with other virtual entities
-                that were created gotten created along the way.
+                that were created created along the way.
 
                 For instance, there may be a set of records (a virtual entity) that match on name
                 and address and another set that match on name and phone before a record with the
                 same name, address and phone combines the two virtual entities into one!
 
             {colorize('Pro tip!', 'good')}
-                The overview section helps you locate interesting resolution steps based that you
+                The overview section helps you locate interesting resolution steps that you
                 can search for in the concise or formatted view.  You can search for ...
                     - a particular step number such as step "2"
                     - a virtual entity_id such as {colorize_entity('V123-S2', 'dim')}
