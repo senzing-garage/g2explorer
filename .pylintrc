@@ -32,6 +32,7 @@ disable=
     redefined-builtin,
     redefined-outer-name,
     simplifiable-if-expression,
+    superfluous-parens,
     too-many-branches,
     too-many-instance-attributes,
     too-many-lines,
