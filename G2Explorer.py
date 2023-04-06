@@ -13,7 +13,6 @@ import textwrap
 import logging
 import traceback
 from collections import OrderedDict
-import configparser
 import subprocess
 import readline
 import atexit
@@ -33,67 +32,28 @@ except:
     print('\nPlease install python pretty table (pip3 install prettytable)\n')
     sys.exit(1)
 
-# Import from Senzing
 try:
     import G2Paths
-    try:
-        from G2IniParams import G2IniParams
-        from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product
-    except:
-        from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product, G2IniParams
+    from G2IniParams import G2IniParams
+    from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product
 except Exception as err:
-
-    # Fall back to pre-Senzing-Python-SDK style of imports.
-    try:
-        import G2Paths
-        from G2IniParams import G2IniParams
-        from G2Product import G2Product
-        from G2Config import G2Config
-        from G2ConfigMgr import G2ConfigMgr
-        from G2Diagnostic import G2Diagnostic
-        from G2Engine import G2Engine
-        from G2Exception import G2Exception
-    except:
-        print(f"\nCould not import Senzing modules:\n{err}\n")
-        sys.exit(1)
+    print(f"\n{err}\n")
+    sys.exit(1)
 
 # ---------------------------
 def execute_api_call(api_name, flag_list, parm_list):
-    if api_version_major < 3:
-        old_versions = {'getEntityByEntityID': 'getEntityByEntityIDV2',
-                        'getEntityByRecordID': 'getEntityByRecordIDV2',
-                        'searchByAttributes': 'searchByAttributesV2',
-                        'whyEntityByEntityID': 'whyEntityByEntityIDV2',
-                        'whyEntities': 'whyEntitiesV2',
-                        'whyRecords': 'whyRecordsV2',
-                        'findNetworkByEntityID': 'findNetworkByEntityIDV2'}
-        if api_name in old_versions:
-            api_name = old_versions[api_name]
-
     parm_list = parm_list if type(parm_list) == list else [parm_list]
     called_by = sys._getframe().f_back.f_code.co_name
 
     if not hasattr(g2Engine, api_name):
         raise Exception(f"{called_by}: {api_name} not valid in {api_version['BUILD_VERSION']}")
 
-    if api_version_major > 2:
-        try: flags = int(G2EngineFlags.combine_flags(flag_list))
-        except Exception as err:
-            raise Exception(f"{called_by}: {api_called} - {err}")
-
-    else:
-        flags = 0
-        for flag_name in flag_list:
-            if hasattr(g2Engine, flag_name):
-                flags = flags | getattr(g2Engine, flag_name)
-            else:
-                raise Exception(f"{called_by}: {api_name} - {flag_name} flag not valid in {api_version['BUILD_VERSION']}")
+    try: flags = int(G2EngineFlags.combine_flags(flag_list))
+    except Exception as err:
+        raise Exception(f"{called_by}: {api_called} - {err}")
 
     response = bytearray()
-    if api_version_major > 2:
-        parm_list += [response, flags]
-    else:
-        parm_list += [flags, response]
+    parm_list += [response, flags]
     api_called = f"{api_name}({', '.join(str(x) for x in parm_list)})"
 
     try:
@@ -416,7 +376,6 @@ class G2CmdShell(cmd.Cmd):
     def __init__(self):
         cmd.Cmd.__init__(self)
         readline.set_completer_delims(' ')
-        self.usePrettyTable = True
 
         self.intro = '\nType help or ? to list commands.\n'
         self.prompt = prompt
@@ -539,7 +498,6 @@ class G2CmdShell(cmd.Cmd):
         # default settings for data and cross sources summary reports
         self.configurable_settings_list = [
             {'setting': 'color_scheme', 'values': ['default', 'light', 'dark'], 'description': 'light works better on dark backgrounds and vice-versa'},
-            {'setting': 'statistic_level', 'values': ['record', 'entity'], 'description': 'sets the statistical point of view of the data and crossSourceSummary reports'},
             {'setting': 'data_source_suppression', 'values': ['off', 'on'], 'description': 'restricts the data and crossSourceSummary reports to only applicable data sources'},
             {'setting': 'show_relations_on_get', 'values': ['tree', 'grid', 'none'], 'description': 'display relationships on get in tree or grid or not at all'},
             {'setting': 'audit_measure', 'values': ['pairwise', 'legacy'], 'description': 'show official pairwise or legacy (record based) statistics'},
@@ -564,7 +522,6 @@ class G2CmdShell(cmd.Cmd):
         self.feedback_log = []
         self.feedback_updated = False
         self.feedback_filename = json.loads(iniParams)['PIPELINE']['CONFIGPATH'] + os.sep + 'feedback.log'
-        print(self.feedback_filename)
         if os.path.exists(self.feedback_filename):
             with open(self.feedback_filename,'r') as f:
                 self.feedback_log = [json.loads(x) for x in f.readlines()]
@@ -618,12 +575,13 @@ class G2CmdShell(cmd.Cmd):
             pass
 
         if self.feedback_updated:
+            print(f"merges logged to {self.feedback_filename}")
             with open(self.feedback_filename,'w') as f:
                 for record in self.feedback_log:
                     f.write(json.dumps(record) + '\n')
 
-    def do_help(self, *args):
-        if not args[0]:
+    def do_help(self, help_topic):
+        if not help_topic:
             print(textwrap.dedent(f'''\
 
             {colorize('Adhoc entity commands:', 'highlight2')}
@@ -631,7 +589,7 @@ class G2CmdShell(cmd.Cmd):
                 get {colorize('- get an entity by entity ID or record_id.', 'dim')}
                 compare {colorize('- place two or more entities side by side for easier comparison.', 'dim')}
                 how {colorize('- get a step by step replay of how an entity came together.', 'dim')}
-                why {colorize('- see why two entities or two records did not resolve.', 'dim')}
+                why {colorize('- see why entities or records either did or did not resolve.', 'dim')}
                 tree {colorize("- see a tree view of an entity's relationships through 1 or 2 degrees.", 'dim')}
                 export {colorize("- export the json records for an entity for debugging or correcting and reloading.", 'dim')}
 
@@ -660,6 +618,8 @@ class G2CmdShell(cmd.Cmd):
             {colorize('Senzing Support Request:', 'dim')} {colorize('https://senzing.zendesk.com/hc/en-us/requests/new', 'highlight2, underline')}
 
              '''))
+        else:
+            cmd.Cmd.do_help(self, help_topic)
 
     # ---------------------------
     def help_knowledgeCenter(self):
@@ -828,10 +788,7 @@ class G2CmdShell(cmd.Cmd):
     def do_quickLook(self, arg):
         try:
             g2_diagnostic_module = G2Diagnostic()
-            if api_version_major > 2:
-                g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
-            else:
-                g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
+            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
             response = bytearray()
             g2_diagnostic_module.getDataSourceCounts(response)
             response = response.decode() if response else ''
@@ -958,7 +915,6 @@ class G2CmdShell(cmd.Cmd):
             tblColumns = []
             tblColumns.append({'name': 'Statistic1', 'width': 25, 'align': 'left'})
             tblColumns.append({'name': 'Entities', 'width': 25, 'align': 'right'})
-            #tblColumns.append({'name': 'Clusters', 'width': 25, 'align': 'right'})
             tblColumns.append({'name': audit_header, 'width': 25, 'align': 'right'})
             tblColumns.append({'name': colorize('-', 'invisible'), 'width': 5, 'align': 'center'})
             tblColumns.append({'name': 'Statistic2', 'width': 25, 'align': 'left'})
@@ -968,7 +924,6 @@ class G2CmdShell(cmd.Cmd):
             row = []
             row.append(colorize('Prior Count', 'highlight2'))
             row.append(fmtStatistic(self.auditData['ENTITY'].get('PRIOR_COUNT', -1)))
-            #row.append(fmtStatistic(self.auditData['CLUSTERS'].get('PRIOR_COUNT', -1)))
             row.append(fmtStatistic(self.auditData[audit_measure].get('PRIOR_COUNT', -1)))
             row.append('')
             row.append(colorize('Same Positives', 'highlight2'))
@@ -978,7 +933,6 @@ class G2CmdShell(cmd.Cmd):
             row = []
             row.append(colorize('Newer Count', 'highlight2'))
             row.append(fmtStatistic(self.auditData['ENTITY'].get('NEWER_COUNT', -1)))
-            #row.append(fmtStatistic(self.auditData['CLUSTERS'].get('NEWER_COUNT', -1)))
             row.append(fmtStatistic(self.auditData[audit_measure].get('NEWER_COUNT', -1)))
             row.append('')
             row.append(colorize('New Positives', categoryColors['MERGE']))
@@ -988,7 +942,6 @@ class G2CmdShell(cmd.Cmd):
             row = []
             row.append(colorize('Common Count', 'highlight2'))
             row.append(fmtStatistic(self.auditData['ENTITY'].get('COMMON_COUNT', -1)))
-            #row.append(fmtStatistic(self.auditData['CLUSTERS'].get('COMMON_COUNT', -1)))
             row.append(fmtStatistic(self.auditData[audit_measure].get('COMMON_COUNT', -1)))
             row.append('')
             row.append(colorize('New Negatives', categoryColors['SPLIT']))
@@ -998,7 +951,6 @@ class G2CmdShell(cmd.Cmd):
             row = []
             row.append(auditCategories[0][0])
             row.append(auditCategories[0][1])
-            #row.append('')  # (colorize(self.auditData['CLUSTERS']['INCREASE'], 'good') if self.auditData['CLUSTERS']['INCREASE'] else '')
             row.append('')  # (colorize(self.auditData['PAIRS']['INCREASE'], 'good') if self.auditData['PAIRS']['INCREASE'] else '')
             row.append('')
             row.append(colorize('Precision', 'highlight2'))
@@ -1008,7 +960,6 @@ class G2CmdShell(cmd.Cmd):
             row = []
             row.append(auditCategories[1][0])
             row.append(auditCategories[1][1])
-            #row.append('')  # (colorize(self.auditData['CLUSTERS']['DECREASE'], 'bad') if self.auditData['CLUSTERS']['DECREASE'] else '')
             row.append('')  # (colorize(self.auditData['PAIRS']['DECREASE'], 'bad') if self.auditData['PAIRS']['DECREASE'] else '')
             row.append('')
             row.append(colorize('Recall', 'highlight2'))
@@ -1018,7 +969,6 @@ class G2CmdShell(cmd.Cmd):
             row = []
             row.append(auditCategories[2][0])
             row.append(auditCategories[2][1])
-            #row.append('')  # (colorize(self.auditData['CLUSTERS']['SIMILAR'], 'highlight1') if self.auditData['CLUSTERS']['SIMILAR'] else '')
             row.append('')  # (colorize(self.auditData['PAIRS']['SIMILAR'], 'highlight1') if self.auditData['PAIRS']['SIMILAR'] else '')
             row.append('')
             row.append(colorize('F1 Score', 'highlight2'))
@@ -1032,7 +982,6 @@ class G2CmdShell(cmd.Cmd):
                     row = []
                     row.append(auditCategories[i][0])
                     row.append(auditCategories[i][1])
-                    #row.append('')
                     row.append('')
                     row.append('')
                     row.append('')
@@ -1345,6 +1294,7 @@ class G2CmdShell(cmd.Cmd):
 
         '''))
     # ---------------------------
+
     def do_entitySizeBreakdown(self, arg):
 
         if not self.snapshotData or (not self.snapshotData.get('ENTITY_SIZE_BREAKDOWN') and not self.snapshotData.get('TEMP_ESB_STATS')):
@@ -1554,9 +1504,8 @@ class G2CmdShell(cmd.Cmd):
 
         {colorize('Syntax:', 'highlight2')}
             dataSourceSummary                               {colorize('with no parameters displays the overall stats', 'dim')}
-            dataSourceSummary <dataSourceCode> <matchLevel> {colorize('where 0=Singletons, 1=Duplicates, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
+            dataSourceSummary <dataSourceCode> <matchLevel> {colorize('where 0=Singletons, 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
         '''))
-
 
     # ---------------------------
     def do_dataSourceSummary(self, arg):
@@ -1569,39 +1518,35 @@ class G2CmdShell(cmd.Cmd):
 
             tblTitle = 'Data Source Summary from %s' % self.snapshotFile
             tblColumns = []
-            tblColumns.append({'name': 'Data Source', 'width': 25, 'align': 'left'})
-            tblColumns.append({'name': 'Records', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Entities', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Compression', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Singletons', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Duplicates', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Ambiguous', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Possibles', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Relationships', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': '\nData Source', 'width': 25, 'align': 'left'})
+            tblColumns.append({'name': '\nRecords', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': '\nEntities', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': '\nCompression', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Records\nUnmatched', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Records\nMatched', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with\nMatched Records', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with\nAmbiguous Matches', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with\nPossible Matches', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with \nPossible Relationships', 'width': 15, 'align': 'right'})
 
             tblRows = []
             for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
+                report_segment = self.snapshotData['DATA_SOURCES'][dataSource]
                 row = []
                 row.append(colorize_dsrc(dataSource))
-                row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['RECORD_COUNT']) if 'RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['ENTITY_COUNT']) if 'ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                row.append(self.snapshotData['DATA_SOURCES'][dataSource]['COMPRESSION'] if 'COMPRESSION' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['SINGLE_COUNT']) if 'SINGLE_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                if self.current_settings['statistic_level'] == 'record':
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('DUPLICATE_RECORD_COUNT', 0)))
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('AMBIGUOUS_MATCH_RECORD_COUNT', 0)))
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('POSSIBLE_MATCH_RECORD_COUNT', 0)))
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource].get('POSSIBLY_RELATED_RECORD_COUNT', 0)))
-                else:
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['DUPLICATE_ENTITY_COUNT']) if 'DUPLICATE_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['AMBIGUOUS_MATCH_ENTITY_COUNT']) if 'AMBIGUOUS_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['POSSIBLE_MATCH_ENTITY_COUNT']) if 'POSSIBLE_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-                    row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource]['POSSIBLY_RELATED_ENTITY_COUNT']) if 'POSSIBLY_RELATED_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource] else 0)
-
+                row.append(fmtStatistic(report_segment.get('RECORD_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('ENTITY_COUNT', 0)))
+                row.append(report_segment.get('COMPRESSION', 0))
+                row.append(fmtStatistic(report_segment.get('SINGLE_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('DUPLICATE_RECORD_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('DUPLICATE_ENTITY_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('AMBIGUOUS_MATCH_ENTITY_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('POSSIBLE_MATCH_ENTITY_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('POSSIBLY_RELATED_ENTITY_COUNT', 0)))
                 tblRows.append(row)
 
             if not arg:
-                self.renderTable(tblTitle, tblColumns, tblRows)
+                self.renderTable(tblTitle, tblColumns, tblRows, combineHeaders=True)
             else:
                 return tblColumns, tblRows
         else:
@@ -1626,7 +1571,7 @@ class G2CmdShell(cmd.Cmd):
                 return
 
             try:
-                sampleRecords = [k for k in self.snapshotData['DATA_SOURCES'][dataSource][matchLevelCode]]
+                sampleRecords = sorted(self.snapshotData['DATA_SOURCES'][dataSource][matchLevelCode], key=lambda x: int(str(x).split()[0]))
             except:
                 sampleRecords = []
             if len(sampleRecords) == 0:
@@ -1636,23 +1581,21 @@ class G2CmdShell(cmd.Cmd):
             currentSample = 0
             while True:
                 self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} in {dataSource}"
-
+                currentRecords = str(sampleRecords[currentSample]).split()
                 if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                    currentRecords = [str(sampleRecords[currentSample])]
                     returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource])
                 else:
-                    currentRecords = sampleRecords[currentSample].split()[:2]
                     if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
-                        ambiguousList = self.getAmbiguousEntitySet(currentRecords[0])  # is this the ambiguous entity
-                        if ambiguousList:
-                            currentRecords = ambiguousList
-                        else:
-                            ambiguousList = self.getAmbiguousEntitySet(currentRecords[1])  # or is this the ambiguous entity
+                        for this_entity_id in currentRecords:
+                            ambiguousList = self.getAmbiguousEntitySet(this_entity_id) # returns all the relationships for the truly ambiguous entity
                             if ambiguousList:
                                 currentRecords = ambiguousList
-                            else:
-                                pass  # if its neither, just show the original two entities
-                    returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
+                                break
+                        returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
+                    else:
+                        if len(currentRecords) > 2:
+                            self.currentReviewList += colorize(f"\n(showing 2 of {len(currentRecords)} qualifying relationships for entity {currentRecords[0]})", 'reset,dim,italics')
+                        returnCode = self.do_compare(','.join(currentRecords[:3]), dataSourceFilter=[dataSource])
 
                 if returnCode != 0:
                     print_message('This entity no longer exists', 'error')
@@ -1724,7 +1667,6 @@ class G2CmdShell(cmd.Cmd):
             crossSourceSummary <dataSource1> <dataSource2> <matchLevel>  {colorize('where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
         '''))
 
-
     # ---------------------------
     def do_crossSourceSummary(self, arg):
 
@@ -1735,38 +1677,33 @@ class G2CmdShell(cmd.Cmd):
         # display the summary if no arguments
         if not arg or len(arg.split()) == 1:
 
-            tblTitle = 'Cross Source Summary from %s' % self.snapshotFile
+            tblTitle = f'Cross Source Summary from {self.snapshotFile}'
             tblColumns = []
-            tblColumns.append({'name': 'Data Source1', 'width': 25, 'align': 'left'})
-            tblColumns.append({'name': 'Data Source2', 'width': 25, 'align': 'left'})
-            tblColumns.append({'name': 'Matches', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Ambiguous', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Possibles', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Relationships', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'From\nData Source', 'width': 25, 'align': 'center'})
+            tblColumns.append({'name': 'To\nData Source', 'width': 25, 'align': 'center'})
+            tblColumns.append({'name': 'Matched\nRecords', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with\nMatched Records', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with\nAmbiguous Matches', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with\nPossible Matches', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Entities with\nPossible Relationships', 'width': 15, 'align': 'right'})
 
             tblRows = []
             for dataSource1 in sorted(self.snapshotData['DATA_SOURCES']):
                 if arg and dataSource1 != arg.upper():
                     continue
                 for dataSource2 in sorted(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES']):
+                    report_segment = self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]
                     row = []
                     row.append(colorize_dsrc(dataSource1))
                     row.append(colorize_dsrc(dataSource2))
-
-                    if self.current_settings['statistic_level'] == 'record':
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_RECORD_COUNT']) if 'MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_RECORD_COUNT']) if 'AMBIGUOUS_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLE_MATCH_RECORD_COUNT']) if 'POSSIBLE_MATCH_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_RECORD_COUNT']) if 'POSSIBLY_RELATED_RECORD_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                    else:
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['MATCH_ENTITY_COUNT']) if 'MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['AMBIGUOUS_MATCH_ENTITY_COUNT']) if 'AMBIGUOUS_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLE_MATCH_ENTITY_COUNT']) if 'POSSIBLE_MATCH_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-                        row.append(fmtStatistic(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2]['POSSIBLY_RELATED_ENTITY_COUNT']) if 'POSSIBLY_RELATED_ENTITY_COUNT' in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2] else 0)
-
+                    row.append(fmtStatistic(report_segment.get('MATCH_RECORD_COUNT', 0)))
+                    row.append(fmtStatistic(report_segment.get('MATCH_ENTITY_COUNT', 0)))
+                    row.append(fmtStatistic(report_segment.get('AMBIGUOUS_MATCH_ENTITY_COUNT', 0)))
+                    row.append(fmtStatistic(report_segment.get('POSSIBLE_MATCH_ENTITY_COUNT', 0)))
+                    row.append(fmtStatistic(report_segment.get('POSSIBLY_RELATED_ENTITY_COUNT', 0)))
                     tblRows.append(row)
 
-            self.renderTable(tblTitle, tblColumns, tblRows)
+            self.renderTable(tblTitle, tblColumns, tblRows, combineHeaders=True)
         else:
             argTokens = arg.split()
             if len(argTokens) != 3:
@@ -1797,9 +1734,8 @@ class G2CmdShell(cmd.Cmd):
             # duplicates are matches for cross source
             if matchLevelCode == 'DUPLICATE_SAMPLE':
                 matchLevelCode = 'MATCH_SAMPLE'
-
             try:
-                sampleRecords = [k for k in self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2][matchLevelCode]]
+                sampleRecords = sorted(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2][matchLevelCode], key=lambda x: int(str(x).split()[0]))
             except:
                 sampleRecords = []
 
@@ -1810,23 +1746,21 @@ class G2CmdShell(cmd.Cmd):
             currentSample = 0
             while True:
                 self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} between {dataSource1} and {dataSource2}"
-
+                currentRecords = str(sampleRecords[currentSample]).split()
                 if matchLevelCode in ('MATCH_SAMPLE'):
-                    currentRecords = [str(sampleRecords[currentSample])]
                     returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource1, dataSource2])
                 else:
-                    currentRecords = sampleRecords[currentSample].split()[:2]
                     if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
-                        ambiguousList = self.getAmbiguousEntitySet(currentRecords[0])  # is this the ambiguous entity
-                        if ambiguousList:
-                            currentRecords = ambiguousList
-                        else:
-                            ambiguousList = self.getAmbiguousEntitySet(currentRecords[1])  # or is this the ambiguous entity
+                        for this_entity_id in currentRecords:
+                            ambiguousList = self.getAmbiguousEntitySet(this_entity_id) # returns all the relationships for the truly ambiguous entity
                             if ambiguousList:
                                 currentRecords = ambiguousList
-                            else:
-                                pass  # if its neither, just show the original two entities
-                    returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource1, dataSource2])
+                                break
+                        returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource1, dataSource2])
+                    else:
+                        if len(currentRecords) > 2:
+                            self.currentReviewList += colorize(f"\n(showing 2 of {len(currentRecords)} qualifying relationships for entity {currentRecords[0]})", 'reset,dim,italics')
+                        returnCode = self.do_compare(','.join(currentRecords[:3]), dataSourceFilter=[dataSource1, dataSource2])
 
                 if returnCode != 0:
                     print_message('This entity no longer exists', 'error')
@@ -2353,10 +2287,7 @@ class G2CmdShell(cmd.Cmd):
             return None
 
         g2_diagnostic_module = G2Diagnostic()
-        if api_version_major > 2:
-            g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
-        else:
-            g2_diagnostic_module.initV2('pyG2Diagnostic', iniParams, False)
+        g2_diagnostic_module.init('pyG2Diagnostic', iniParams, False)
 
         # get the features in order
         orderedFeatureList = []
@@ -2431,9 +2362,29 @@ class G2CmdShell(cmd.Cmd):
                 if relatedEntity['IS_AMBIGUOUS'] != 0:
                     entitySet.append(str(relatedEntity['ENTITY_ID']))
             if len(entitySet) > 1:
-                entitySet.append(entityId)
-                return entitySet
+                return [entityId] + entitySet
         return None
+
+    # ---------------------------
+    def getRelatedEntitySet(self, entityId, sampleCategory=''):
+        getFlagList = ['G2_ENTITY_INCLUDE_ALL_RELATIONS',
+                       'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO']
+        try:
+            jsonData2 = execute_api_call('getEntityByEntityID', getFlagList, int(entityId))
+        except Exception as err:
+            print_message(err, 'error')
+            return None
+        entitySet = []
+        for relatedEntity in jsonData2['RELATED_ENTITIES']:
+            if sampleCategory == 'POSSIBLE_MATCH_SAMPLE':
+                if relatedEntity['MATCH_LEVEL'] <= 2 and relatedEntity['IS_AMBIGUOUS'] == 0:
+                    entitySet.append(str(relatedEntity['ENTITY_ID']))
+            elif sampleCategory == 'POSSIBLY_RELATED_SAMPLE':
+                if relatedEntity['MATCH_LEVEL'] == 3:
+                    entitySet.append(str(relatedEntity['ENTITY_ID']))
+            else:
+                entitySet.append(str(relatedEntity['ENTITY_ID']))
+        return [entityId] + sorted(entitySet, key=lambda x: int(x))
 
     # ---------------------------
     def help_compare(self):
@@ -2472,11 +2423,6 @@ class G2CmdShell(cmd.Cmd):
         else:
             entityList = arg.split()
 
-        if not all(x.isnumeric() for x in entityList) and not entityList[0].upper() in self.dsrcCodeLookup:
-            print_message('Invalid parameter: expected one or more numeric entity IDs', 'caution')
-            return -1 if calledDirect else 0
-
-
         getFlagList = ['G2_ENTITY_INCLUDE_ENTITY_NAME',
                        'G2_ENTITY_INCLUDE_RECORD_DATA',
                        'G2_ENTITY_INCLUDE_RECORD_MATCHING_INFO',
@@ -2486,7 +2432,6 @@ class G2CmdShell(cmd.Cmd):
                        'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO',
                        'G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY']
         compareList = []
-        entityList = list(set(entityList)) #--ensures a unique set of entities
         for entityId in entityList:
             try:
                 jsonData = execute_api_call('getEntityByEntityID', getFlagList, int(entityId))
@@ -2553,7 +2498,7 @@ class G2CmdShell(cmd.Cmd):
                             entityData['otherData'].append(item)
 
             for relatedEntity in jsonData['RELATED_ENTITIES']:
-                if relatedEntity['ENTITY_ID'] in entityList:
+                if str(relatedEntity['ENTITY_ID']) in entityList:
                     entityData['crossRelations'].append(relatedEntity)  # '%s\n %s\n to %s' % (relatedEntity['MATCH_KEY'][1:], relatedEntity['ERRULE_CODE'], relatedEntity['ENTITY_ID']))
                 else:
                     entityData['otherRelations'].append(relatedEntity)  # {"MATCH_LEVEL": self.relatedMatchLevels[relatedEntity['MATCH_LEVEL']], "MATCH_KEY": relatedEntity['MATCH_KEY'][1:], "ERRULE_CODE": relatedEntity['ERRULE_CODE'], "ENTITY_ID": relatedEntity['ENTITY_ID'], "ENTITY_NAME": relatedEntity['ENTITY_NAME']})
@@ -2691,7 +2636,6 @@ class G2CmdShell(cmd.Cmd):
             tree <entity_id> degree <n> all   {colorize('adding the "all" tag disables the default limit of 10 per category', 'dim')}
         '''))
 
-
     # ---------------------------
     def do_tree(self, arg, **kwargs):
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
@@ -2758,10 +2702,15 @@ class G2CmdShell(cmd.Cmd):
             nodes[entity_id]['ENTITY_NAME'] = entity_data['RESOLVED_ENTITY']['ENTITY_NAME']
             nodes[entity_id]['RECORD_SUMMARY'] = entity_data['RESOLVED_ENTITY']['RECORD_SUMMARY']
             nodes[entity_id]['RELATED_ENTITY_COUNT'] = 0
-            nodes[entity_id]['DISCLOSED_RELATION_COUNT'] = 0
-            nodes[entity_id]['DISCLOSED_RELATION_CATEGORIES'] = {}
-            nodes[entity_id]['DERIVED_RELATION_COUNT'] = 0
-            nodes[entity_id]['DERIVED_RELATION_CATEGORIES'] = {}
+
+            rel_class_list = [['Ambiguous matches', 'AM_COUNT', 'AM_CATEGORIES'],
+                              ['Possible matches', 'PM_COUNT', 'PM_CATEGORIES'],
+                              ['Possible relationships', 'PR_COUNT', 'PR_CATEGORIES'],
+                              ['Disclosed relationships', 'DR_COUNT', 'DR_CATEGORIES']]
+
+            for rel_class_fields in rel_class_list:
+                nodes[entity_id][rel_class_fields[1]] = 0
+                nodes[entity_id][rel_class_fields[2]] = {}
 
             # categorize relationships
             for relationship in entity_data.get('RELATED_ENTITIES', []):
@@ -2774,21 +2723,25 @@ class G2CmdShell(cmd.Cmd):
                 nodes[entity_id]['RELATED_ENTITY_COUNT'] += 1
                 nodes[entity_id]['RELATED_ENTITY_LIST'].append(related_id)
 
-                disclosed_keys, derived_keys = self.categorizeMatchkey(relationship['MATCH_KEY'])
+                disclosed_keys, plus_keys, minus_keys = self.categorizeMatchkey(relationship['MATCH_KEY'])
 
-                if disclosed_keys:  # choose disclosed over derived
-                    nodes[entity_id]['DISCLOSED_RELATION_COUNT'] += 1
-                    key = '+'.join(sorted(disclosed_keys))
-                    if key not in nodes[entity_id]['DISCLOSED_RELATION_CATEGORIES']:
-                        nodes[entity_id]['DISCLOSED_RELATION_CATEGORIES'][key] = []
-                    nodes[entity_id]['DISCLOSED_RELATION_CATEGORIES'][key].append(related_id)
+                if relationship['IS_DISCLOSED']:
+                    rel_class_index = 3
+                    key = colorize('+'.join(sorted(disclosed_keys)), 'highlight2')
+                elif relationship['IS_AMBIGUOUS']:
+                    rel_class_index = 0
+                    key = colorize('+'.join(sorted(plus_keys)), 'good') + (colorize('-' + '-'.join(minus_keys), 'bad') if minus_keys else '')
+                elif relationship['MATCH_LEVEL'] < 3:
+                    rel_class_index = 1
+                    key = colorize('+'.join(sorted(plus_keys)), 'good') + (colorize('-' + '-'.join(minus_keys), 'bad') if minus_keys else '')
+                else:
+                    rel_class_index = 2
+                    key = colorize('+'.join(sorted(plus_keys)), 'good')
 
-                elif derived_keys:
-                    nodes[entity_id]['DERIVED_RELATION_COUNT'] += 1
-                    key = '+'.join(sorted(derived_keys))
-                    if key not in nodes[entity_id]['DERIVED_RELATION_CATEGORIES']:
-                        nodes[entity_id]['DERIVED_RELATION_CATEGORIES'][key] = []
-                    nodes[entity_id]['DERIVED_RELATION_CATEGORIES'][key].append(related_id)
+                nodes[entity_id][rel_class_list[rel_class_index][1]] += 1
+                if key not in nodes[entity_id][rel_class_list[rel_class_index][2]]:
+                    nodes[entity_id][rel_class_list[rel_class_index][2]][key] = []
+                nodes[entity_id][rel_class_list[rel_class_index][2]][key].append(related_id)
 
             # remove related entities at prior level
             related_entity_list = []
@@ -2823,12 +2776,10 @@ class G2CmdShell(cmd.Cmd):
                 entity_id = current_degree_list[-1]['entity_id']
                 related_ids_to_build = []
 
-                for relation_fields in [['DISCLOSED', 'DISCLOSED_RELATION_COUNT', 'DISCLOSED_RELATION_CATEGORIES'],
-                                        ['DERIVED', 'DERIVED_RELATION_COUNT', 'DERIVED_RELATION_CATEGORIES']]:
-
-                    class_name = relation_fields[0]
-                    count_key = relation_fields[1]
-                    category_key = relation_fields[2]
+                for rel_class_fields in rel_class_list:
+                    class_name = rel_class_fields[0]
+                    count_key = rel_class_fields[1]
+                    category_key = rel_class_fields[2]
 
                     if nodes[entity_id][count_key] > 0:
                         class_node = Node(f'{nodes[entity_id]}-{class_name}')
@@ -2836,13 +2787,9 @@ class G2CmdShell(cmd.Cmd):
                         # class_node.node_desc = f'{colorized_class_name} ({nodes[entity_id][count_key]})'
                         class_node.node_desc = f'{class_name} ({nodes[entity_id][count_key]})'
 
-                        category_color = 'highlight2' if class_name == 'DISCLOSED' else 'good'
-
                         for category in sorted(nodes[entity_id][category_key].keys()):
                             category_node = Node(f'{nodes[entity_id]}-{category}')
-                            # colorized_category = colorize('+', 'highlight1' + ',dim').join(colorize(item, 'highlight1') for item in category.split('+'))
-                            colorized_category = colorize('+'.join(category.split('+')), category_color)
-                            category_node.node_desc = f'{colorized_category} ({len(nodes[entity_id][category_key][category])})'
+                            category_node.node_desc = f'{category} ({len(nodes[entity_id][category_key][category])})'
                             cnt = 0
                             for related_id in sorted(nodes[entity_id][category_key][category]):
                                 entity_node = Node(related_id)
@@ -2914,20 +2861,21 @@ class G2CmdShell(cmd.Cmd):
     # ---------------------------
     def categorizeMatchkey(self, match_key):
         # match_key example:
-        #  'SAYARI(FATHER,SPOUSE:SON,SPOUSE)+ADDRESS+PHONE-DOB'
+        #  'SOME_REL_DOMAIN(FATHER,SPOUSE:SON,SPOUSE)+ADDRESS+PHONE-DOB (Ambiguous)'
+        match_key = match_key.replace(' (Ambiguous)', '')
         disclosed_keys = []
-        derived_keys = []
+        plus_keys = []
+        minus_keys = []
         key_list = re.split('(\+|\-)', match_key)
 
         i = 1
         while i < len(key_list):
-            # ignore the minuses
             if key_list[i] in ('+'):
                 i += 1
                 this_key = key_list[i]
                 # derived
                 if '(' not in this_key:
-                    derived_keys.append(this_key)
+                    plus_keys.append(this_key)
                 # disclosed
                 else:
                     both_side_roles = this_key[this_key.find('(') + 1:this_key.find(')')].split(':')
@@ -2935,9 +2883,14 @@ class G2CmdShell(cmd.Cmd):
                     # but if blank, must use right side as both sides not required
                     roles_to_use = both_side_roles[0] if both_side_roles[0] else both_side_roles[1]
                     disclosed_keys += roles_to_use.split(',')
+            elif key_list[i] in ('-'):
+                i += 1
+                this_key = key_list[i]
+                minus_keys.append(this_key)
+
             i += 1
 
-        return disclosed_keys, derived_keys
+        return disclosed_keys, plus_keys, minus_keys
 
     # ---------------------------
     def help_why(self):
@@ -2963,7 +2916,6 @@ class G2CmdShell(cmd.Cmd):
             [!] indicates that this value was not not even scored as too many entities share it
             [#] indicates that this value was suppressed in favor of a more complete value\n
         '''))
-
 
     # ---------------------------
     def do_why(self, arg):
@@ -3236,7 +3188,7 @@ class G2CmdShell(cmd.Cmd):
 
                 entityData[thisId]['crossRelations'] = []
                 for relatedEntity in bestEntity['RELATED_ENTITIES']:
-                    if relatedEntity['ENTITY_ID'] in entityList:
+                    if str(relatedEntity['ENTITY_ID']) in entityList:
                         relationship = {}
                         relationship['entityId'] = relatedEntity['ENTITY_ID']
                         relationship['matchKey'] = relatedEntity['MATCH_KEY']
@@ -3313,7 +3265,7 @@ class G2CmdShell(cmd.Cmd):
 
             entityData[entityId]['crossRelations'] = []
             for relatedEntity in jsonData2['RELATED_ENTITIES']:
-                if relatedEntity['ENTITY_ID'] in entityList:
+                if str(relatedEntity['ENTITY_ID']) in entityList:
                     relationship = {}
                     relationship['entityId'] = relatedEntity['ENTITY_ID']
                     relationship['matchKey'] = relatedEntity['MATCH_KEY']
@@ -3335,7 +3287,7 @@ class G2CmdShell(cmd.Cmd):
             for resolvedEntityBase in jsonData2['RESOLVED_ENTITIES']:
                 resolvedEntity = resolvedEntityBase['ENTITY']['RESOLVED_ENTITY']
                 resolvedEntityMatchInfo = resolvedEntityBase['MATCH_INFO']
-                if resolvedEntity['ENTITY_ID'] in entityList and resolvedEntity['ENTITY_ID'] != entityId:
+                if str(resolvedEntity['ENTITY_ID']) in entityList and str(resolvedEntity['ENTITY_ID']) != entityId:
                     whyKey = {}
                     whyKey['matchKey'] = resolvedEntityMatchInfo['MATCH_KEY']
                     whyKey['ruleCode'] = self.getRuleDesc(resolvedEntityMatchInfo['ERRULE_CODE'])
@@ -3491,7 +3443,8 @@ class G2CmdShell(cmd.Cmd):
             if ftypeCode == 'AMBIGUOUS_ENTITY':
                 if featureData['formattedFeatDesc'] .startswith(' ['):
                     featureData['formattedFeatDesc'] = 'Ambiguous!'
-            featureData['formattedFeatDesc1'] = colorize(featureData['formattedFeatDesc'], 'bad')
+                featureData['formattedFeatDesc1'] = colorize(featureData['formattedFeatDesc'], 'bad')
+                featureData['formattedFeatDesc'] = colorize(featureData['formattedFeatDesc'], 'bad')
 
         # sort rejected matches lower
         if dimmit:
@@ -3676,14 +3629,14 @@ class G2CmdShell(cmd.Cmd):
                 A how report documents each step of the resoution process for an entity so if
                 an entity has 100s records there will be 100s of steps. Each step will either
                 create a virtual entity, add to it or combine it with other virtual entities
-                that were created gotten created along the way.
+                that were created created along the way.
 
                 For instance, there may be a set of records (a virtual entity) that match on name
                 and address and another set that match on name and phone before a record with the
                 same name, address and phone combines the two virtual entities into one!
 
             {colorize('Pro tip!', 'good')}
-                The overview section helps you locate interesting resolution steps based that you
+                The overview section helps you locate interesting resolution steps that you
                 can search for in the concise or formatted view.  You can search for ...
                     - a particular step number such as step "2"
                     - a virtual entity_id such as {colorize_entity('V123-S2', 'dim')}
@@ -4581,21 +4534,14 @@ class G2CmdShell(cmd.Cmd):
         # such as an entity and its relationships
 
         # possible kwargs
-        displayFlag = kwargs['displayFlag'] if 'displayFlag' in kwargs else None
-        titleColor = kwargs['titleColor'] if 'titleColor' in kwargs else 'table_title'
-        titleJustify = kwargs['titleJustify'] if 'titleJustify' in kwargs else 'l'  # left
-        headerColor = kwargs['headerColor'] if 'headerColor' in kwargs else 'column_header'
+        displayFlag = kwargs.get('displayFlag')
+        titleColor = kwargs.get('titleColor', 'table_title')
+        titleJustify = kwargs.get('titleJustify', 'l')
+        headerColor = kwargs.get('headerColor', 'column_header')
+        combineHeaders = kwargs.get('combineHeaders', False)
 
         # setup the table
-        tableWidth = 0
-        columnHeaderList = []
-        for i in range(len(tblColumns)):
-            tableWidth += tblColumns[i]['width']
-            tblColumns[i]['name'] = colorize(str(tblColumns[i]['name']), 'column_header')
-            columnHeaderList.append(tblColumns[i]['name'])
-        # tableObject = ColoredTable(title_color=titleColor, header_color=headerColor, title_justify=titleJustify)
         tableObject = PrettyTable()
-
         # tableObject.title = tblTitle
         tableObject.hrules = PRETTY_TABLE_ALL
         if pretty_table_style_available:
@@ -4604,28 +4550,38 @@ class G2CmdShell(cmd.Cmd):
             tableObject.horizontal_char = '\u2500'
             tableObject.vertical_char = '\u2502'
             tableObject.junction_char = '\u253C'
-        tableObject.field_names = columnHeaderList
+
+        fieldNameList = []
+        columnHeaderList = []
+        for columnData in tblColumns:
+            fieldNameList.append(columnData['name'])
+            columnHeaderList.append('\n'.join(colorize(str(x), 'column_header') for x in str(columnData['name']).split('\n')))
+        tableObject.field_names = fieldNameList
+
+        tableObject.header = False # make first row header to allow for stacked column header names
+        tableObject.add_row(columnHeaderList)
 
         totalRowCnt = 0
         for row in tblRows:
             totalRowCnt += 1
             row[0] = '\n'.join([i for i in str(row[0]).split('\n')])
-            if self.usePrettyTable:
-                tableObject.add_row(row)
-            else:
-                tableObject.append_row(row)
+            tableObject.add_row(row)
 
         # format with data in the table
         for columnData in tblColumns:
-            tableObject.max_width[str(columnData['name'])] = columnData['width']
-            tableObject.align[str(columnData['name'])] = columnData['align'][0:1].lower()
+            #tableObject.max_width[str(columnData['name'])] = columnData['width']
+            tableObject.align[columnData['name']] = columnData['align'][0:1].lower()
+
+        table_str = tableObject.get_string()
+        if combineHeaders:
+            table_str = self.combine_table_headers(table_str)
 
         # write to a file so can be viewed with less
         # also write to the lastTableData variable in case cannot write to file
         fmtTableString = ''
         if tblTitle:
             fmtTableString = colorize(tblTitle, titleColor) + '\n'
-        fmtTableString += tableObject.get_string() + '\n'
+        fmtTableString += table_str + '\n'
 
         writeMode = 'w'
         if displayFlag in ('append', 'end'):
@@ -4643,6 +4599,37 @@ class G2CmdShell(cmd.Cmd):
             self.showReport('auto')
             print('')
         return
+
+    # ---------------------------
+    def combine_table_headers(self, report_str):
+        report = report_str.split('\n')
+        col_sep = report[1][0]
+        old_header1 = report[1].replace(Colors.COLUMN_HEADER,'').replace(Colors.RESET, '')
+        colorize_characters_width = len(colorize('', 'column_header'))
+        headers1 = old_header1.split(col_sep)
+        prior_header_len = 0
+        new_header1 = col_sep
+        new_header1_colored = col_sep
+        for i in range(len(headers1)):
+            if i > 0 and i < len(headers1) - 1:
+                if i == len(headers1)-2 or headers1[i].strip() != headers1[i-1].strip() or len(headers1[i-1].strip()) == 0:
+                    if i == len(headers1)-2:
+                        prior_header_len += len(headers1[i]) + 1
+                    if prior_header_len > 0:
+                        new_header1 += f"{headers1[i-1]:^{prior_header_len-1}}{col_sep}"
+                        new_header1_colored += f"{colorize(headers1[i-1], 'column_header'):^{prior_header_len-1+colorize_characters_width}}{col_sep}"
+                        prior_header_len = 0
+                prior_header_len += len(headers1[i]) + 1
+
+        new_header0 = report[0]
+        for i in range(len(old_header1)):
+            if old_header1[i] == col_sep and new_header1[i] != col_sep:
+                new_header0 = new_header0[0:i] + new_header0[i-1] + new_header0[i+1:]
+
+        new_report = [new_header0, new_header1_colored]
+        new_report.extend(report[2:])
+
+        return '\n'.join(new_report)
 
     # ---------------------------
     def showReport(self, arg=None, **kwargs):
@@ -4992,15 +4979,10 @@ if __name__ == '__main__':
         ini_param_creator = G2IniParams()
         iniParams = ini_param_creator.getJsonINIParams(ini_file_name)
 
-
     # try to initialize the g2engine
     try:
         g2Engine = G2Engine()
-        
-        if api_version_major > 2:
-            g2Engine.init('pyG2Explorer', iniParams, debugTrace)
-        else:
-            g2Engine.initV2('pyG2Explorer', iniParams, debugTrace)
+        g2Engine.init('pyG2Explorer', iniParams, debugTrace)
     except Exception as err:
         print_message(err, 'error')
         sys.exit(1)
@@ -5008,10 +4990,7 @@ if __name__ == '__main__':
     # get needed config data
     try:
         g2ConfigMgr = G2ConfigMgr()
-        if api_version_major > 2:
-            g2ConfigMgr.init('pyG2ConfigMgr', iniParams, False)
-        else:
-            g2ConfigMgr.initV2('pyG2ConfigMgr', iniParams, False)
+        g2ConfigMgr.init('pyG2ConfigMgr', iniParams, False)
         defaultConfigID = bytearray()
         g2ConfigMgr.getDefaultConfigID(defaultConfigID)
         defaultConfigDoc = bytearray()

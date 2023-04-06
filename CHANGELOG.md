@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [markdownlint](https://dlaa.me/markdownlint/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2023-04-06
+
+### Added in 2.2.3
+
+- changed data and cross source summary display to reflect entity counts rather than relationship counts
+- removed support for 2.x versions
+- fixed bug with missing relationships on compare and why
+
 ## [2.2.2] - 2023-01-12
 
 ### Added in 2.2.2
