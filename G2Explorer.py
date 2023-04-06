@@ -522,7 +522,6 @@ class G2CmdShell(cmd.Cmd):
         self.feedback_log = []
         self.feedback_updated = False
         self.feedback_filename = json.loads(iniParams)['PIPELINE']['CONFIGPATH'] + os.sep + 'feedback.log'
-        print(self.feedback_filename)
         if os.path.exists(self.feedback_filename):
             with open(self.feedback_filename,'r') as f:
                 self.feedback_log = [json.loads(x) for x in f.readlines()]
@@ -576,12 +575,13 @@ class G2CmdShell(cmd.Cmd):
             pass
 
         if self.feedback_updated:
+            print(f"merges logged to {self.feedback_filename}")
             with open(self.feedback_filename,'w') as f:
                 for record in self.feedback_log:
                     f.write(json.dumps(record) + '\n')
 
-    def do_help(self, *args):
-        if not args[0]:
+    def do_help(self, help_topic):
+        if not help_topic:
             print(textwrap.dedent(f'''\
 
             {colorize('Adhoc entity commands:', 'highlight2')}
@@ -618,6 +618,8 @@ class G2CmdShell(cmd.Cmd):
             {colorize('Senzing Support Request:', 'dim')} {colorize('https://senzing.zendesk.com/hc/en-us/requests/new', 'highlight2, underline')}
 
              '''))
+        else:
+            cmd.Cmd.do_help(self, help_topic)
 
     # ---------------------------
     def help_knowledgeCenter(self):
@@ -1502,7 +1504,7 @@ class G2CmdShell(cmd.Cmd):
 
         {colorize('Syntax:', 'highlight2')}
             dataSourceSummary                               {colorize('with no parameters displays the overall stats', 'dim')}
-            dataSourceSummary <dataSourceCode> <matchLevel> {colorize('where 0=Singletons, 1=Duplicates, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
+            dataSourceSummary <dataSourceCode> <matchLevel> {colorize('where 0=Singletons, 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
         '''))
 
     # ---------------------------
@@ -1569,7 +1571,7 @@ class G2CmdShell(cmd.Cmd):
                 return
 
             try:
-                sampleRecords = sorted(self.snapshotData['DATA_SOURCES'][dataSource][matchLevelCode], key=lambda x: int(x.split()[0]))
+                sampleRecords = sorted(self.snapshotData['DATA_SOURCES'][dataSource][matchLevelCode], key=lambda x: int(str(x).split()[0]))
             except:
                 sampleRecords = []
             if len(sampleRecords) == 0:
@@ -1733,7 +1735,7 @@ class G2CmdShell(cmd.Cmd):
             if matchLevelCode == 'DUPLICATE_SAMPLE':
                 matchLevelCode = 'MATCH_SAMPLE'
             try:
-                sampleRecords = sorted(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2][matchLevelCode], key=lambda x: int(x.split()[0]))
+                sampleRecords = sorted(self.snapshotData['DATA_SOURCES'][dataSource1]['CROSS_MATCHES'][dataSource2][matchLevelCode], key=lambda x: int(str(x).split()[0]))
             except:
                 sampleRecords = []
 
@@ -4976,7 +4978,6 @@ if __name__ == '__main__':
         G2Paths.check_file_exists_and_readable(ini_file_name)
         ini_param_creator = G2IniParams()
         iniParams = ini_param_creator.getJsonINIParams(ini_file_name)
-
 
     # try to initialize the g2engine
     try:
