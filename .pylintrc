@@ -5,6 +5,7 @@ disable=
     arguments-renamed,
     bare-except,
     broad-except,
+    broad-exception-raised,
     chained-comparison,
     consider-using-dict-items,
     consider-using-enumerate,
