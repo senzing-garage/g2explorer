@@ -2,6 +2,7 @@
 disable=
     anomalous-backslash-in-string,
     arguments-differ,
+    arguments-renamed,
     bare-except,
     broad-except,
     chained-comparison,
