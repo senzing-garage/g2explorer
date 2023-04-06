@@ -2861,7 +2861,7 @@ class G2CmdShell(cmd.Cmd):
     # ---------------------------
     def categorizeMatchkey(self, match_key):
         # match_key example:
-        #  'SAYARI(FATHER,SPOUSE:SON,SPOUSE)+ADDRESS+PHONE-DOB (Ambiguous)'
+        #  'SOME_REL_DOMAIN(FATHER,SPOUSE:SON,SPOUSE)+ADDRESS+PHONE-DOB (Ambiguous)'
         match_key = match_key.replace(' (Ambiguous)', '')
         disclosed_keys = []
         plus_keys = []

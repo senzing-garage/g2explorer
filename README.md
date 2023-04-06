@@ -45,7 +45,7 @@ optional arguments:
 
 ### Prerequisites
 - Python 3.6 or higher
-- Senzing API version 2.4 or higher
+- Senzing API version 3.0 or higher
 - python pretty table module (pip3 install ptable)
 
 ### Installation
