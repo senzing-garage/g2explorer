@@ -50,7 +50,7 @@ def execute_api_call(api_name, flag_list, parm_list):
 
     try: flags = int(G2EngineFlags.combine_flags(flag_list))
     except Exception as err:
-        raise Exception(f"{called_by}: {api_called} - {err}")
+        raise Exception(f"{called_by}: {api_name} - {err}")
 
     response = bytearray()
     parm_list += [response, flags]
@@ -61,12 +61,12 @@ def execute_api_call(api_name, flag_list, parm_list):
         api_call(*parm_list)
         response_data = json.loads(response)
         if debugOutput:
-            showDebug(called_by, api_called + '\n\t' + '\n\t'.join(flag_list) + '\n' + json.dumps(response_data, indent=4))
+            showDebug(called_by, api_name + '\n\t' + '\n\t'.join(flag_list) + '\n' + json.dumps(response_data, indent=4))
         return response_data
     except G2Exception as err:
-        raise Exception(f"{called_by}: {api_called} - {err}")
+        raise Exception(f"{called_by}: {api_name} - {err}")
     #except Exception as err:
-    #    raise Exception(f"{called_by}: {api_called} - {err}")
+    #    raise Exception(f"{called_by}: {api_name} - {err}")
 
 # ==============================
 class Colors:
@@ -197,6 +197,7 @@ class Colors:
     FG_ORANGERED1 = '\033[38;5;202m'
 
 
+
 # ----------------------------
 def colorize(in_string, color_list='None'):
     return Colors.apply(in_string, color_list)
@@ -272,8 +273,8 @@ def colorize_match_data(matchDict):
 
         if matchDict.get('ruleCode'):
             matchStr += f"\n {colorize(matchDict['ruleCode'], 'dim')}"
-        else:
-            matchStr += f"\n {colorize('no principles satisfied!', 'bad')}"
+        #else:
+        #    matchStr += f"\n {colorize('no principles satisfied!', 'bad')}"
 
     if 'entityId' in matchDict and 'entityName' in matchDict:
         matchStr += f"\n to {colorize_entity(matchDict['entityId'])} {matchDict['entityName']}"
@@ -465,6 +466,8 @@ class G2CmdShell(cmd.Cmd):
                                           'POSSIBLE': 'POSSIBLE_MATCH_SAMPLE',
                                           'POSSIBLY': 'POSSIBLY_RELATED_SAMPLE',
                                           'RELATED': 'POSSIBLY_RELATED_SAMPLE'}
+
+        self.lastEntityID = 0
 
         # get settings
         settingsFileName = '.' + os.path.basename(sys.argv[0].lower().replace('.py', '')) + '_settings'
@@ -2088,6 +2091,7 @@ class G2CmdShell(cmd.Cmd):
                        'G2_ENTITY_INCLUDE_RELATED_ENTITY_NAME',
                        'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO',
                        'G2_ENTITY_INCLUDE_RELATED_RECORD_SUMMARY']
+
         try:
             if len(arg_tokens) == 1:
                 resolvedJson = execute_api_call('getEntityByEntityID', getFlagList, int(arg_tokens[0]))
@@ -2100,6 +2104,7 @@ class G2CmdShell(cmd.Cmd):
         relatedEntityCount = len(resolvedJson['RELATED_ENTITIES']) if 'RELATED_ENTITIES' in resolvedJson else 0
         entityID = str(resolvedJson['RESOLVED_ENTITY']['ENTITY_ID'])
         entityName = resolvedJson['RESOLVED_ENTITY']['ENTITY_NAME']
+        self.lastEntityID = int(entityID)
 
         if showFeatures:
             tblColumns = []
@@ -2210,6 +2215,71 @@ class G2CmdShell(cmd.Cmd):
                 self.do_tree(entityID)
 
         return 0
+
+
+    # ---------------------------
+    def do_next(self, arg):
+        self.find(1, arg)
+    def do_n(self, arg):
+        removeFromHistory()
+        self.do_next(arg)
+
+
+    # ---------------------------
+    def do_previous(self, arg):
+        self.find(-1, arg)
+    def do_p(self, arg):
+        removeFromHistory()
+        self.do_previous(arg)
+
+
+    # ---------------------------
+    def find(self, step, arg):
+        startingID = 0
+        data_source = None
+        arg_list = arg.split()
+        getFlagList = []
+        for parm in arg_list:
+            if parm.isdigit():
+                startingID = parm
+            else:
+                data_source = parm.upper()
+                getFlagList = ['G2_ENTITY_INCLUDE_RECORD_SUMMARY']
+        if startingID:
+            entityID = int(startingID)
+        else:
+            entityID = self.lastEntityID + step
+        trys = 0
+        while True:
+            try:
+                resolvedJson = execute_api_call('getEntityByEntityID', getFlagList, entityID)
+                if data_source:
+                    found = False
+                    for record in resolvedJson['RESOLVED_ENTITY']['RECORD_SUMMARY']:
+                        #print(record['DATA_SOURCE'])
+                        if record['DATA_SOURCE'].startswith(data_source):
+                            found = True
+                            break
+                    if found:
+                        self.do_get(str(entityID))
+                        break
+                    else:
+                        raise(Exception('does not contain data source'))
+                else:
+                    self.do_get(str(entityID))
+                    break
+            except:
+                entityID += step
+                trys += 1
+                if trys == 1000:
+                    print('\nsearching ...')
+                if entityID <= 0 or trys >= 100000:
+                    if step == -1:
+                        print_message(f'no prior entities', 'warning')
+                    else:
+                        print_message(f'search for next abandoned after 100k tries', 'error')
+                    break
+
 
     # ---------------------------
     def formatRecords(self, recordList, reportType, showAll):
@@ -4038,10 +4108,18 @@ class G2CmdShell(cmd.Cmd):
                                     left_matching_record_list[record_key].append(lib_feat_id)
 
                                 matched_feat_id = left_features[lib_feat_id]['matchedFeatId']
-                                for record_key in right_features[matched_feat_id]['record_list']:
+                                if matched_feat_id in right_features:
+                                    for record_key in right_features[matched_feat_id]['record_list']:
+                                        if record_key not in right_matching_record_list:
+                                            right_matching_record_list[record_key] = []
+                                        right_matching_record_list[record_key].append(matched_feat_id)
+                                else:
+                                    record_key = 'MISSING!'
+                                    input(f"note: step {step_num}, right side missing {lib_feat_id} {left_features[lib_feat_id].get('ftypeCode', '?')} \"{left_features[lib_feat_id].get('featDesc', '?')}\", press any key ...")
                                     if record_key not in right_matching_record_list:
                                         right_matching_record_list[record_key] = []
                                     right_matching_record_list[record_key].append(matched_feat_id)
+
                         best_left_record_key = sorted(sorted([{'key': i, 'len': len(left_matching_record_list[i])} for i in left_matching_record_list], key=lambda k: k['key']), key=lambda k: k['len'], reverse=True)[0]['key']
                         best_right_record_key = sorted(sorted([{'key': i, 'len': len(right_matching_record_list[i])} for i in right_matching_record_list], key=lambda k: k['key']), key=lambda k: k['len'], reverse=True)[0]['key']
 
@@ -4072,7 +4150,8 @@ class G2CmdShell(cmd.Cmd):
 
                                     if matched_feat_id not in features2:
                                         feature_data['record_key2'] = 'ERROR' + self.dsrc_record_sep + 'MISSING'
-                                        input(f"wait {feature_data['record_key2']}")
+                                        input(f"note: step {step_num}, {side} side missing {matched_feat_id} {feature_data.get('ftypeCode', '?')} \"{feature_data.get('featDesc', '?')}\", press any key ...")
+
                                     else:
                                         if best_record_key2 in features2[matched_feat_id]['record_list']:
                                             feature_data['record_key2'] = best_record_key2
@@ -4259,6 +4338,7 @@ class G2CmdShell(cmd.Cmd):
 
         return
 
+
     # ---------------------------
     def get_virtual_entity_data(self, raw_virtual_entity_data, features_by_record):
         virtual_entity_data = {'id': raw_virtual_entity_data['VIRTUAL_ENTITY_ID']}
@@ -4355,7 +4435,12 @@ class G2CmdShell(cmd.Cmd):
 
         # use the test data source and entity type
         record1json['RECORD_TYPE'] = 'SCORE_TEST'
+        record1json['TRUSTED_ID_TYPE'] = 'SCORE'
+        record1json['TRUSTED_ID_NUMBER'] = 'TEST'
+
         record2json['RECORD_TYPE'] = 'SCORE_TEST'
+        record2json['TRUSTED_ID_TYPE'] = 'SCORE'
+        record2json['TRUSTED_ID_NUMBER'] = 'TEST'
 
         # add the records
         try:
@@ -4376,6 +4461,106 @@ class G2CmdShell(cmd.Cmd):
             return
 
         return
+
+    # ---------------------------
+    def help_assign(self):
+        print(textwrap.dedent(f'''\
+
+        Assigns records from a particular entity to a trusted_id in order to move them to another entity
+
+        {colorize('Syntax:', 'highlight2')}
+            assign <trusted_id_attribute> <trusted_id_value> to <entity_id> <name_spec>
+
+        {colorize('Example:', 'highlight2')}
+            assign trusted_id_number 1001 to 7 "ABC Company"
+        '''))
+
+
+    # ---------------------------
+    def do_assign(self, arg):
+        calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
+        if not arg:
+            self.help_merge()
+            return -1 if calledDirect else 0
+
+        if ',' in arg:
+            arg_list = next(csv.reader([arg], delimiter=',', quotechar='"', skipinitialspace=True))
+        else:
+            arg_list = next(csv.reader([arg], delimiter=' ', quotechar='"', skipinitialspace=True))
+
+        if len(arg_list) != 5:
+            print_message('Incorrect syntax (be sure to quote parameters with spaces)', 'error')
+            self.help_merge()
+            return -1 if calledDirect else 0
+
+        trusted_id_type = arg_list[0]
+        trusted_id_number = arg_list[1]
+        from_entity_id = int(arg_list[3])
+        name_spec = arg_list[4]
+
+        getEntityFlags = ['G2_ENTITY_INCLUDE_ALL_FEATURES',
+                          'G2_ENTITY_INCLUDE_RECORD_DATA',
+                          'G2_ENTITY_INCLUDE_RECORD_JSON_DATA',
+                          'G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS']
+        try:
+            entity_data = execute_api_call('getEntityByEntityID', getEntityFlags, from_entity_id)
+        except Exception as err:
+            print_message(err, 'error')
+            return -1 if calledDirect else 0
+
+        qualifying_names = []
+        qualifying_feature_ids = []
+        for feature_data in entity_data['RESOLVED_ENTITY']['FEATURES'].get('NAME', []):
+            for values_data in feature_data['FEAT_DESC_VALUES']:
+                if name_spec.upper() in values_data['FEAT_DESC'].upper() or name_spec == '*':
+                    qualifying_names.append(values_data['FEAT_DESC'])
+                    qualifying_feature_ids.append(values_data['LIB_FEAT_ID'])
+        if len(qualifying_names) == 0:
+            print_message('No features with that name match this entity', 'error')
+            return -1 if calledDirect else 0
+
+        qualifying_records = []
+        for record_data in entity_data['RESOLVED_ENTITY']['RECORDS']:
+            if name_spec == '*':
+                qualifying_records.append(record_data)
+            else:
+                for feature_data in record_data['FEATURES']:
+                    if feature_data['LIB_FEAT_ID'] in qualifying_feature_ids:
+                        qualifying_records.append(record_data)
+                        break
+        if len(qualifying_records) == 0:
+            print_message('No records with that name match this entity', 'error')
+            return -1 if calledDirect else 0
+
+        question = f"\n{len(qualifying_feature_ids)} names affecting {len(qualifying_records)} records will be assigned, ""OK"" to proceed ..."
+        reply = input(question)
+        if reply.upper() != 'OK':
+            print_message('Assign aborted', 'warning')
+            return -1 if calledDirect else 0
+        else:
+            removeFromHistory()
+
+        print()
+        for record_data in qualifying_records:
+            data_source = record_data['DATA_SOURCE']
+            record_id = record_data['RECORD_ID']
+            json_data = dict(record_data['JSON_DATA'])
+            json_data[trusted_id_type] = trusted_id_number
+            print(f"updating {data_source}: {record_id} ...")
+            try:
+                retcode = g2Engine.addRecord(data_source, record_id, json.dumps(json_data))
+            except G2Exception as err:
+                print(str(err))
+                break
+
+        print('\nResulting entity ... \n')
+        get_record_data = qualifying_records[0]['DATA_SOURCE'] + ' ' + qualifying_records[0]['RECORD_ID']
+        try:
+            resolvedJson = execute_api_call('getEntityByRecordID', [], get_record_data.split())
+        except Exception as err:
+            print_message(err, 'error')
+            return -1 if calledDirect else 0
+        self.do_get(get_record_data)
 
     # ---------------------------
     def help_merge(self):
@@ -4642,7 +4827,26 @@ class G2CmdShell(cmd.Cmd):
 
         from_how_or_why = kwargs.get('from_how_or_why')
         if self.current_settings['auto_scroll'] == 'off' and not from_how_or_why:
-            print(self.currentRenderString)
+            screen_width= os.get_terminal_size()[0]-1
+
+            for line in self.currentRenderString.split('\n'):
+                if len(re.sub("\\x1b\[\d*;\d*;\d*m", "", line)) < screen_width:
+                    print(f" {line}")
+                else:
+                    nline = ''
+                    nline_len = 1
+                    formatting = False
+                    for char in line:
+                        nline += char
+                        if char == '\033':
+                            formatting = True
+                        elif formatting and char == 'm':
+                            formatting = False
+                        else:
+                            nline_len += 1
+                        if nline_len >= screen_width:
+                            break
+                    print(f" {nline}{Colors.RESET}")
             return
 
         # note: the F allows less to auto quit if output fits on screen
@@ -5002,9 +5206,7 @@ if __name__ == '__main__':
         sys.exit(1)
     g2ConfigMgr.destroy()
 
-    subprocess.Popen(["echo", "-ne", "\e[?7l"])  #--text wrapping off
     G2CmdShell().cmdloop()
-    subprocess.Popen(["echo", "-ne", "\e[?7h"])  #--text wrapping on
 
     g2Engine.destroy()
     sys.exit()
