@@ -4357,7 +4357,7 @@ class G2CmdShell(cmd.Cmd):
 
                 # creates the master feature list for the virtual entity (accumulating which records have which features)
                 record_key = record['DATA_SOURCE'] + self.dsrc_record_sep + record['RECORD_ID']
-                for lib_feat_id in features_by_record[record['DATA_SOURCE']][record['RECORD_ID']]:
+                for lib_feat_id in features_by_record.get(record['DATA_SOURCE'], {}).get(record['RECORD_ID'], []):
                     if lib_feat_id not in virtual_entity_data['features']:
                         virtual_entity_data['features'][lib_feat_id] = dict(features_by_record[record['DATA_SOURCE']][record['RECORD_ID']][lib_feat_id])
                         virtual_entity_data['features'][lib_feat_id]['record_list'] = [record_key]
@@ -4409,8 +4409,7 @@ class G2CmdShell(cmd.Cmd):
             score [{'{'}"passport_number": "1231234", "passport_country": "US"{'}'}, {'{'}"passport_number": "1231234", "passport_country": "USA"{'}'}]
 
         {colorize('Notes:', 'highlight2')}
-            If testing only a name and the two records cannot find each other, you may need to add another attribute such as
-            an identifier or phone to see how they would score.
+            Use the keyword "force" to force the two records to find each other by adding a trusted_id.
         '''))
 
 
@@ -4419,6 +4418,10 @@ class G2CmdShell(cmd.Cmd):
         if not arg:
             self.help_score()
             return
+
+        force_trusted_id = len(arg.split()) > 1 and 'FORCE' in [x.upper() for x in arg.split()]
+        if force_trusted_id:
+            arg = ' '.join([x for x in arg.split() if x.upper() != 'FORCE'])
 
         try:
             jsonData = json.loads(arg)
@@ -4435,12 +4438,13 @@ class G2CmdShell(cmd.Cmd):
 
         # use the test data source and entity type
         record1json['RECORD_TYPE'] = 'SCORE_TEST'
-        record1json['TRUSTED_ID_TYPE'] = 'SCORE'
-        record1json['TRUSTED_ID_NUMBER'] = 'TEST'
-
         record2json['RECORD_TYPE'] = 'SCORE_TEST'
-        record2json['TRUSTED_ID_TYPE'] = 'SCORE'
-        record2json['TRUSTED_ID_NUMBER'] = 'TEST'
+
+        if force_trusted_id:
+            record1json['TRUSTED_ID_TYPE'] = 'SCORE'
+            record1json['TRUSTED_ID_NUMBER'] = 'TEST'
+            record2json['TRUSTED_ID_TYPE'] = 'SCORE'
+            record2json['TRUSTED_ID_NUMBER'] = 'TEST'
 
         # add the records
         try:
