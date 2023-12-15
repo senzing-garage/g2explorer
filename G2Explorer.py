@@ -4419,7 +4419,7 @@ class G2CmdShell(cmd.Cmd):
             self.help_score()
             return
 
-        force_trusted_id = len(arg.split()) > 1 and 'FORCE' in [x.upper() for x in arg.split()]
+        force_trusted_id = 'FORCE' in [x.upper() for x in arg.split()]
         if force_trusted_id:
             arg = ' '.join([x for x in arg.split() if x.upper() != 'FORCE'])
 
