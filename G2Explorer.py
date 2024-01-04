@@ -1516,8 +1516,8 @@ class G2CmdShell(cmd.Cmd):
             print_message('Please load a json file created with G2Snapshot.py to use this command', 'warning')
             return
 
-        # display the summary if no arguments
-        if not arg:
+        # display the summary if 0 arguments (all datasources) or 1 argument signifying a single data source
+        if not arg or ' ' not in arg:
 
             tblTitle = 'Data Source Summary from %s' % self.snapshotFile
             tblColumns = []
@@ -1525,33 +1525,36 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': '\nRecords', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': '\nEntities', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': '\nCompression', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Records\nUnmatched', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Records\nMatched', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Entities with\nMatched Records', 'width': 15, 'align': 'right'})
+            #tblColumns.append({'name': 'Records\nUnmatched', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Matched\nRecords', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Matched\nEntities', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Entities with\nAmbiguous Matches', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Entities with\nPossible Matches', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Entities with \nPossible Relationships', 'width': 15, 'align': 'right'})
 
             tblRows = []
             for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
+                if arg and not dataSource.startswith(arg.upper()):
+                    continue
                 report_segment = self.snapshotData['DATA_SOURCES'][dataSource]
                 row = []
                 row.append(colorize_dsrc(dataSource))
                 row.append(fmtStatistic(report_segment.get('RECORD_COUNT', 0)))
                 row.append(fmtStatistic(report_segment.get('ENTITY_COUNT', 0)))
                 row.append(report_segment.get('COMPRESSION', 0))
-                row.append(fmtStatistic(report_segment.get('SINGLE_COUNT', 0)))
-                row.append(fmtStatistic(report_segment.get('DUPLICATE_RECORD_COUNT', 0)))
+                #row.append(fmtStatistic(report_segment.get('SINGLE_COUNT', 0)))
+                #row.append(fmtStatistic(report_segment.get('DUPLICATE_RECORD_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('RECORD_COUNT', 0)-report_segment.get('ENTITY_COUNT', 0)))
                 row.append(fmtStatistic(report_segment.get('DUPLICATE_ENTITY_COUNT', 0)))
                 row.append(fmtStatistic(report_segment.get('AMBIGUOUS_MATCH_ENTITY_COUNT', 0)))
                 row.append(fmtStatistic(report_segment.get('POSSIBLE_MATCH_ENTITY_COUNT', 0)))
                 row.append(fmtStatistic(report_segment.get('POSSIBLY_RELATED_ENTITY_COUNT', 0)))
                 tblRows.append(row)
 
-            if not arg:
-                self.renderTable(tblTitle, tblColumns, tblRows, combineHeaders=True)
-            else:
-                return tblColumns, tblRows
+            #if not arg:
+            self.renderTable(tblTitle, tblColumns, tblRows, combineHeaders=True)
+            #else:
+            #    return tblColumns, tblRows
         else:
             argTokens = arg.split()
             if len(argTokens) != 2:
@@ -1685,7 +1688,7 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': 'From\nData Source', 'width': 25, 'align': 'center'})
             tblColumns.append({'name': 'To\nData Source', 'width': 25, 'align': 'center'})
             tblColumns.append({'name': 'Matched\nRecords', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Entities with\nMatched Records', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Matched\nEntities', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Entities with\nAmbiguous Matches', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Entities with\nPossible Matches', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Entities with\nPossible Relationships', 'width': 15, 'align': 'right'})
@@ -4846,7 +4849,7 @@ class G2CmdShell(cmd.Cmd):
                             formatting = True
                         elif formatting and char == 'm':
                             formatting = False
-                        else:
+                        elif not formatting:
                             nline_len += 1
                         if nline_len >= screen_width:
                             break
