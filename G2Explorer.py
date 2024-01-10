@@ -467,6 +467,12 @@ class G2CmdShell(cmd.Cmd):
                                           'POSSIBLY': 'POSSIBLY_RELATED_SAMPLE',
                                           'RELATED': 'POSSIBLY_RELATED_SAMPLE'}
 
+        self.categorySortOrder = {'MATCH': 1,
+                                  'AMBIGUOUS_MATCH': 2,
+                                  'POSSIBLE_MATCH': 3,
+                                  'POSSIBLY_RELATED': 4,
+                                  'DISCLOSED_RELATION': 5}
+
         self.lastEntityID = 0
 
         # get settings
@@ -1279,6 +1285,8 @@ class G2CmdShell(cmd.Cmd):
             self.renderTable(tblTitle, tblColumns, tblRows)
             return
 
+
+
     # ---------------------------
     def help_entitySizeBreakdown(self):
         print(textwrap.dedent(f'''\
@@ -1296,8 +1304,8 @@ class G2CmdShell(cmd.Cmd):
             They may be overmatches or they may just be large entities with lots of values.
 
         '''))
-    # ---------------------------
 
+    # ---------------------------
     def do_entitySizeBreakdown(self, arg):
 
         if not self.snapshotData or (not self.snapshotData.get('ENTITY_SIZE_BREAKDOWN') and not self.snapshotData.get('TEMP_ESB_STATS')):
@@ -1499,6 +1507,139 @@ class G2CmdShell(cmd.Cmd):
         except IOError as err:
             print_message(f"Could not save review to {self.snapshotFile}", 'error')
 
+    def select_matching_category(self, principle_data, prior_header):
+        all_rows = []
+        for principle in principle_data.keys():
+            for matchKey in principle_data[principle].keys():
+                all_rows.append([principle, matchKey, principle_data[principle][matchKey]['COUNT'], principle_data[principle][matchKey]['SAMPLE']])
+        max_rows = 10
+        while True:
+            cnt = 0
+            report_rows = []
+            for row in sorted(all_rows, key=lambda k: k[2], reverse=True):
+                if cnt < max_rows or not max_rows:
+                    cnt += 1
+                    report_rows.append([cnt] + row)
+                else:
+                    report_rows[-1][1] = 'remaining principles'
+                    report_rows[-1][2] = 'remaining match keys'
+                    report_rows[-1][3] += row[2]
+                    report_rows[-1][4].extend(row[3])
+
+            tblTitle = f'Matching statistics for {prior_header}'
+            tblColumns = []
+            tblColumns.append({'name': 'Index', 'width': 5, 'align': 'center'})
+            tblColumns.append({'name': 'Match key', 'width': 50, 'align': 'left'})
+            tblColumns.append({'name': 'Count', 'width': 10, 'align': 'right'})
+            tblRows = []
+            for row in report_rows:
+                if row[1] != 'remaining principles':
+                    colorizedMatchKey = colorize_match_data({'matchKey': row[2], 'ruleCode': row[1]})
+                else:
+                    colorizedMatchKey = f'{len(all_rows)-max_rows} more match keys'
+                tblRows.append([row[0], colorizedMatchKey, row[3]])
+
+            self.renderTable(tblTitle, tblColumns, tblRows)
+            if len(report_rows) < len(all_rows):
+                prompt = colorize_prompt('Select Index # to review, (A)ll match keys, (Q)uit... ')
+            else:
+                prompt = colorize_prompt('Select Index # to review, (Q)uit ... ')
+            reply = input(prompt)
+            if reply:
+                removeFromHistory()
+                if reply.upper().startswith('Q'):
+                    return None
+                if reply.isdigit() and int(reply) > 0 and int(reply) <= len(tblRows):
+                    return report_rows[int(reply)-1]
+                if reply.upper().startswith('A'):
+                    max_rows = 0
+
+    # ---------------------------
+    def help_principlesUsed(self):
+        print(textwrap.dedent(f'''\
+
+        Displays the statistics for the principles used.
+
+        {colorize('Syntax:', 'highlight2')}
+            principlesUsed                    {colorize('with no parameters displays the stats by category', 'dim')}
+            principlesUsed <category>         {colorize('displays the matchkey stats for a certain category such as match, possible_match, etc', 'dim')}
+            principlesUsed principles         {colorize('displays the stats for all principles', 'dim')}
+            principlesUsed 100                {colorize('displays the matchkey stats for a certain rule', 'dim')}
+
+        '''))
+
+    # ---------------------------
+    def do_principlesUsed(self, arg):
+
+        if not self.snapshotData or not self.snapshotData.get('PRINCIPLES_USED'):
+            print_message('Please load a json file created with G2Snapshot.py to access this report', 'warning')
+            return
+
+        self.statsByCategory = {}
+        self.statsByPrinciple = {}
+        for category in self.snapshotData['PRINCIPLES_USED'].keys(): #, key=lambda k: self.categorySortOrder[k]):
+            if category not in self.statsByCategory:
+                self.statsByCategory[category] = {'COUNT': 0}
+            for principle in self.snapshotData['PRINCIPLES_USED'][category].keys():
+                self.statsByPrinciple[principle] = {'COUNT': 0, 'CATEGORY': category}
+                for matchKey in self.snapshotData['PRINCIPLES_USED'][category][principle].keys():
+                    self.statsByCategory[category]['COUNT'] += self.snapshotData['PRINCIPLES_USED'][category][principle][matchKey]['COUNT']
+                    self.statsByPrinciple[principle]['COUNT'] += self.snapshotData['PRINCIPLES_USED'][category][principle][matchKey]['COUNT']
+
+        if not arg:
+            tblTitle = f'Principles Used Report from {self.snapshotFile}'
+            tblColumns = []
+            tblColumns.append({'name': 'Category', 'width': 25, 'align': 'left'})
+            tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
+            tblRows = []
+            for category in sorted(self.statsByCategory.keys(), key=lambda k: self.categorySortOrder[k]):
+                tblRows.append([category, self.statsByCategory[category]['COUNT']])
+            self.renderTable(tblTitle, tblColumns, tblRows)
+
+        elif arg.upper().startswith('PRIN'):
+            tblTitle = f'Principles Used Report from {self.snapshotFile}'
+            tblColumns = []
+            tblColumns.append({'name': 'Principle', 'width': 50, 'align': 'left'})
+            tblColumns.append({'name': 'Category', 'width': 25, 'align': 'left'})
+            tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
+            tblRows = []
+            for principle in sorted(self.statsByPrinciple.keys()):
+                tblRows.append([principle, self.statsByPrinciple[principle]['CATEGORY'], self.statsByPrinciple[principle]['COUNT']])
+            self.renderTable(tblTitle, tblColumns, tblRows)
+
+        elif arg.upper() in self.statsByCategory:
+            category = arg.upper()
+            header = f"Principles used for {category} across all data sources"
+            report_row = self.select_matching_category(self.snapshotData['PRINCIPLES_USED'][category], header)
+
+        elif arg.upper() in self.statsByPrinciple:
+            principle = arg.upper()
+            category = self.statsByPrinciple[principle]['CATEGORY']
+            header = f"Principles used for {principle} across all data sources"
+            data = {principle: self.snapshotData['PRINCIPLES_USED'][category][principle]}
+            report_row = self.select_matching_category(data, header)
+
+        else:
+            print_message(f"Invalid parameter", 'error')
+            self.help_principlesUsed()
+            return
+           
+    # ---------------------------
+    def complete_principlesUsed(self, text, line, begidx, endidx):
+        before_arg = line.rfind(" ", 0, begidx)
+        # if before_arg == -1:
+        #    return # arg not found
+
+        fixed = line[before_arg + 1:begidx]  # fixed portion of the arg
+        arg = line[before_arg + 1:endidx]
+
+        possibles = list(self.categorySortOrder.keys())
+        possibles.append('PRINCIPLES')
+        if hasattr(self, 'statsByPrinciple'):
+            possibles.extend(list(self.statsByPrinciple.keys()))
+
+        return [i for i in possibles if i.lower().startswith(arg.lower())]
+
     # ---------------------------
     def help_dataSourceSummary(self):
         print(textwrap.dedent(f'''\
@@ -1528,9 +1669,9 @@ class G2CmdShell(cmd.Cmd):
             #tblColumns.append({'name': 'Records\nUnmatched', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Matched\nRecords', 'width': 15, 'align': 'right'})
             tblColumns.append({'name': 'Matched\nEntities', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Entities with\nAmbiguous Matches', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Entities with\nPossible Matches', 'width': 15, 'align': 'right'})
-            tblColumns.append({'name': 'Entities with \nPossible Relationships', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Related Entities\nAmbiguous Matches', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Related Entities\nPossible Matches', 'width': 15, 'align': 'right'})
+            tblColumns.append({'name': 'Related Entities\nPossible Relationships', 'width': 15, 'align': 'right'})
 
             tblRows = []
             for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
@@ -1546,15 +1687,12 @@ class G2CmdShell(cmd.Cmd):
                 #row.append(fmtStatistic(report_segment.get('DUPLICATE_RECORD_COUNT', 0)))
                 row.append(fmtStatistic(report_segment.get('RECORD_COUNT', 0)-report_segment.get('ENTITY_COUNT', 0)))
                 row.append(fmtStatistic(report_segment.get('DUPLICATE_ENTITY_COUNT', 0)))
-                row.append(fmtStatistic(report_segment.get('AMBIGUOUS_MATCH_ENTITY_COUNT', 0)))
-                row.append(fmtStatistic(report_segment.get('POSSIBLE_MATCH_ENTITY_COUNT', 0)))
-                row.append(fmtStatistic(report_segment.get('POSSIBLY_RELATED_ENTITY_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('AMBIGUOUS_MATCH_RELATION_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('POSSIBLE_MATCH_RELATION_COUNT', 0)))
+                row.append(fmtStatistic(report_segment.get('POSSIBLY_RELATED_RELATION_COUNT', 0)))
                 tblRows.append(row)
 
-            #if not arg:
             self.renderTable(tblTitle, tblColumns, tblRows, combineHeaders=True)
-            #else:
-            #    return tblColumns, tblRows
         else:
             argTokens = arg.split()
             if len(argTokens) != 2:
@@ -1584,59 +1722,72 @@ class G2CmdShell(cmd.Cmd):
                 print_message('No records found', 'warning')
                 return
 
-            currentSample = 0
+            matchLevelBase = matchLevelCode.replace('_SAMPLE', '')
+
             while True:
-                self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelCode} in {dataSource}"
-                currentRecords = str(sampleRecords[currentSample]).split()
-                if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                    returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource])
-                else:
-                    if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
-                        for this_entity_id in currentRecords:
-                            ambiguousList = self.getAmbiguousEntitySet(this_entity_id) # returns all the relationships for the truly ambiguous entity
-                            if ambiguousList:
-                                currentRecords = ambiguousList
-                                break
-                        returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
-                    else:
-                        if len(currentRecords) > 2:
-                            self.currentReviewList += colorize(f"\n(showing 2 of {len(currentRecords)} qualifying relationships for entity {currentRecords[0]})", 'reset,dim,italics')
-                        returnCode = self.do_compare(','.join(currentRecords[:3]), dataSourceFilter=[dataSource])
+                header = f"{matchLevelBase} in {dataSource}"
+                report_row = self.select_matching_category(self.snapshotData['DATA_SOURCES'][dataSource][matchLevelCode.replace('_SAMPLE', '_PRINCIPLES')], header)
+                if not report_row:
+                    break
 
-                if returnCode != 0:
-                    print_message('This entity no longer exists', 'error')
-
+                currentSample = 0
+                sampleRecords = report_row[4]
+                colorizedMatchKey = colorize_match_data({'matchKey': report_row[2]})
                 while True:
+                    self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {colorizedMatchKey} {matchLevelBase} in {dataSource}"
+                    currentRecords = str(sampleRecords[currentSample]).split()
                     if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
-                        special_actions = 'DHWE'
+                        returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource])
                     else:
-                        reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
-                        special_actions = 'WE'
-                    if reply:
-                        removeFromHistory()
-                    else:
-                        reply = 'N'
+                        if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
+                            for this_entity_id in currentRecords:
+                                ambiguousList = self.getAmbiguousEntitySet(this_entity_id) # returns all the relationships for the truly ambiguous entity
+                                if ambiguousList:
+                                    currentRecords = ambiguousList
+                                    break
+                            returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
+                        else:
+                            if len(currentRecords) > 2:
+                                self.currentReviewList += colorize(f"\n(showing 1 of {len(currentRecords)} qualifying relationships for entity {currentRecords[0]})", 'reset,dim,italics')
+                                currentRecords = currentRecords[:2]
+                            returnCode = self.do_compare(','.join(currentRecords), dataSourceFilter=[dataSource])
+
+                    if returnCode != 0:
+                        print_message('This entity no longer exists', 'error')
+
+                    while True:
+                        if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
+                            reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
+                            special_actions = 'DHWE'
+                        else:
+                            reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
+                            special_actions = 'WE'
+                        if reply:
+                            removeFromHistory()
+                        else:
+                            reply = 'N'
+
+                        if reply.upper().startswith('Q'):
+                            break
+                        elif reply.upper() == 'S':
+                            self.do_scroll('')
+                        elif reply.upper()[0] in 'PNG':  # previous, next, goto
+                            currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                            break
+                        elif reply.upper()[0] in special_actions:
+                            if reply.upper().startswith('D'):
+                                self.do_get('detail ' + ','.join(currentRecords))
+                            elif reply.upper().startswith('W'):
+                                self.do_why(','.join(currentRecords))
+                            elif reply.upper().startswith('H'):
+                                self.do_how(','.join(currentRecords))
+                                break
+                            elif reply.upper().startswith('E'):
+                                self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
 
                     if reply.upper().startswith('Q'):
                         break
-                    elif reply.upper() == 'S':
-                        self.do_scroll('')
-                    elif reply.upper()[0] in 'PNG':  # previous, next, goto
-                        currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
-                        break
-                    elif reply.upper()[0] in special_actions:
-                        if reply.upper().startswith('D'):
-                            self.do_get('detail ' + ','.join(currentRecords))
-                        elif reply.upper().startswith('W'):
-                            self.do_why(','.join(currentRecords))
-                        elif reply.upper().startswith('H'):
-                            self.do_how(','.join(currentRecords))
-                            break
-                        elif reply.upper().startswith('E'):
-                            self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
-                if reply.upper().startswith('Q'):
-                    break
+
             self.currentReviewList = None
 
     # ---------------------------
@@ -4835,7 +4986,6 @@ class G2CmdShell(cmd.Cmd):
         from_how_or_why = kwargs.get('from_how_or_why')
         if self.current_settings['auto_scroll'] == 'off' and not from_how_or_why:
             screen_width= os.get_terminal_size()[0]-1
-
             for line in self.currentRenderString.split('\n'):
                 if len(re.sub("\\x1b\[\d*;\d*;\d*m", "", line)) < screen_width:
                     print(f" {line}")
