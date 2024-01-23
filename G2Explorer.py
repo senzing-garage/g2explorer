@@ -412,9 +412,6 @@ class G2CmdShell(cmd.Cmd):
         self.dsrcCodeLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_DSRC']:
             self.dsrcCodeLookup[cfgRecord['DSRC_CODE']] = cfgRecord
-        self.etypeLookup = {}
-        for cfgRecord in self.cfgData['G2_CONFIG']['CFG_ETYPE']:
-            self.etypeLookup[cfgRecord['ETYPE_ID']] = cfgRecord
         self.erruleLookup = {}
         for cfgRecord in self.cfgData['G2_CONFIG']['CFG_ERRULE']:
             self.erruleLookup[cfgRecord['ERRULE_ID']] = cfgRecord
@@ -793,7 +790,7 @@ class G2CmdShell(cmd.Cmd):
             return
 
         try:
-            jsonData = json.load(open(statpackFileName, encoding="utf-8"))
+            jsonData = json.load(open(statpackFileName, encoding='utf-8'))
         except ValueError as err:
             print_message(err, 'error')
             return
@@ -845,31 +842,25 @@ class G2CmdShell(cmd.Cmd):
             return
         jsonResponse = json.loads(response)
 
-        has_entity_type = False
-        for row in jsonResponse:
-            if row.get('ETYPE_CODE', 'GENERIC') != 'GENERIC':
-                has_entity_type = True
-                break
-
         tblTitle = 'Data source counts'
         tblColumns = []
         tblColumns.append({'name': 'id', 'width': 5, 'align': 'center'})
         tblColumns.append({'name': 'DataSource', 'width': 30, 'align': 'left'})
-        if has_entity_type:
-            tblColumns.append({'name': 'EntityType', 'width': 30, 'align': 'left'})
         tblColumns.append({'name': 'ActualRecordCount', 'width': 20, 'align': 'right'})
         tblColumns.append({'name': 'DistinctRecordCount', 'width': 20, 'align': 'right'})
         tblRows = []
+        actual_count = distinct_count = 0
         for row in jsonResponse:
-            entityType = '' if row['ETYPE_CODE'] == 'GENERIC' or row['ETYPE_CODE'] == row['DSRC_CODE'] else row['ETYPE_CODE']
             tblRow = []
             tblRow.append(colorize(row['DSRC_ID'], 'row_title'))
             tblRow.append(colorize_dsrc(row['DSRC_CODE']))
-            if has_entity_type:
-                tblRow.append(colorize(entityType, 'dim'))
             tblRow.append("{:,}".format(row['DSRC_RECORD_COUNT']))
             tblRow.append("{:,}".format(row['OBS_ENT_COUNT']))
             tblRows.append(tblRow)
+            actual_count += row['DSRC_RECORD_COUNT']
+            distinct_count += row['OBS_ENT_COUNT']
+        tblRows.append(['', colorize('  Totals', 'row_title'), colorize("{:,}".format(actual_count), 'row_title'), colorize("{:,}".format(distinct_count), 'row_title')])
+
         self.renderTable(tblTitle, tblColumns, tblRows)
 
     # ---------------------------
@@ -1363,8 +1354,8 @@ class G2CmdShell(cmd.Cmd):
             for entitySizeData in sorted(self.snapshotData['ENTITY_SIZE_BREAKDOWN'], key=lambda k: k['ENTITY_SIZE'], reverse=True):
                 row = []
                 row.append(colorize(entitySizeData['ENTITY_SIZE_GROUP'], 'row_title'))
-                row.append(entitySizeData['ENTITY_COUNT'])
-                row.append(entitySizeData['REVIEW_COUNT'])
+                row.append(fmtStatistic(entitySizeData['ENTITY_COUNT']))
+                row.append(fmtStatistic(entitySizeData['REVIEW_COUNT']))
                 row.append(' | '.join(colorize(x, 'caution') for x in sorted(entitySizeData['REVIEW_FEATURES'])))
                 tblRows.append(row)
             self.renderTable(tblTitle, tblColumns, tblRows)
@@ -1542,18 +1533,143 @@ class G2CmdShell(cmd.Cmd):
         except IOError as err:
             print_message(f"Could not save review to {self.snapshotFile}", 'error')
 
+    # ---------------------------
+    def help_multiSourceSummary(self):
+        print(textwrap.dedent(f'''\
+
+        Displays the statistics for the different match levels within each data source.
+
+        {colorize('Syntax:', 'highlight2')}
+            multiSourceSummary                               {colorize('with no parameters displays all the combinations', 'dim')}
+            multiSourceSummary <dataSourceCode>              {colorize('displays the stats for a particular data source', 'dim')}
+        '''))
+
+    # ---------------------------
+    def complete_multSourceSummary(self, text, line, begidx, endidx):
+        before_arg = line.rfind(" ", 0, begidx)
+        # if before_arg == -1:
+        #    return # arg not found
+
+        fixed = line[before_arg + 1:begidx]  # fixed portion of the arg
+        arg = line[before_arg + 1:endidx]
+
+        possibles = []
+        spaces = line.count(' ')
+        if spaces <= 1:
+            possibles = []
+            if self.snapshotData:
+                for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
+                    possibles.append(dataSource)
+
+        return [i for i in possibles if i.lower().startswith(arg.lower())]
+
+    # ---------------------------
+    def do_multiSourceSummary(self, arg):
+        if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
+            print_message('Please load a json file created with G2Snapshot.py to use this command', 'warning')
+            return
+        if len(self.snapshotData['MULTI_SOURCE']) == 0:
+            print_message('No multi-source entities exist!', 'warning')
+            return
+
+        filter_str = arg 
+        while True:
+
+            tblTitle = 'Multi Source Summary from %s' % self.snapshotFile
+            tblColumns = []
+            tblColumns.append({'name': 'Index', 'width': 5, 'align': 'center'})
+            tblColumns.append({'name': 'Data Sources', 'width': 100, 'align': 'left'})
+            tblColumns.append({'name': 'Records', 'width': 15, 'align': 'right'})
+
+            report_rows = []
+            for dataSourcesList in sorted(self.snapshotData['MULTI_SOURCE']):
+                if filter_str and filter_str.upper() not in dataSourcesList:
+                    continue
+                report_rows.append([dataSourcesList, self.snapshotData['MULTI_SOURCE'][dataSourcesList]['COUNT'], self.snapshotData['MULTI_SOURCE'][dataSourcesList]['SAMPLE']])
+            if not report_rows:
+                print_message(f'No records found for {filter_str}', 'error')
+                input('press any key to continue ... ')
+                filter_str = None
+                continue
+
+            report_rows = sorted(report_rows, key=lambda k: k[1], reverse = True)
+            tblRows = []
+            for row in report_rows:
+                tblRows.append([len(tblRows) + 1, colorize(' | ', 'dim').join(colorize_dsrc(x) for x in row[0].split('|')), fmtStatistic(row[1])])
+
+            self.renderTable(tblTitle, tblColumns, tblRows)
+
+            sampleRecords = None
+            prompt = colorize_prompt('Select Index # to review, (Q)uit ... ')
+            reply = input(prompt)
+            if reply:
+                removeFromHistory()
+                if reply.upper().startswith('Q'):
+                    return
+                if reply.isdigit() and int(reply) > 0 and int(reply) <= len(tblRows):
+                    dataSourcesList = tblRows[int(reply)-1][1]
+                    sampleRecords = report_rows[int(reply)-1][2]
+
+                else:
+                    filter_str = reply.upper()
+            else:
+                filter_str = None
+
+            if not sampleRecords:
+                continue
+
+            currentSample = 0
+            while True:
+                self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {dataSourcesList}"
+                returnCode = self.do_get(str(sampleRecords[currentSample]))
+                if returnCode != 0:
+                    print_message('This entity no longer exists', 'error')
+
+                while True:
+                    reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
+                    special_actions = 'DHWE'
+                    if reply:
+                        removeFromHistory()
+                    else:
+                        reply = 'N'
+
+                    if reply.upper().startswith('Q'):
+                        break
+                    elif reply.upper() == 'S':
+                        self.do_scroll('')
+                    elif reply.upper()[0] in 'PNG':  # previous, next, goto
+                        currentSample = self.move_pointer(reply, currentSample, len(sampleRecords))
+                        break
+                    elif reply.upper()[0] in special_actions:
+                        if reply.upper().startswith('D'):
+                            self.do_get('detail ' + ','.join(currentRecords))
+                        elif reply.upper().startswith('W'):
+                            self.do_why(','.join(currentRecords))
+                        elif reply.upper().startswith('H'):
+                            self.do_how(','.join(currentRecords))
+                            break
+                        elif reply.upper().startswith('E'):
+                            self.export_report_sample(reply, currentRecords, f"{'-'.join(currentRecords)}.json")
+
+                if reply.upper().startswith('Q'):
+                    break
+
+            self.currentReviewList = None
+
+    # ---------------------------
     def select_matching_category(self, principle_data, prior_header):
         all_rows = []
         for principle in principle_data.keys():
             for matchKey in principle_data[principle].keys():
                 all_rows.append([principle, matchKey, principle_data[principle][matchKey]['COUNT'], principle_data[principle][matchKey]['SAMPLE']])
         max_rows = 10
+        print(len(all_rows))
         filter_str = None
         while True:
             cnt = 0
             report_rows = []
             for row in sorted(all_rows, key=lambda k: k[2], reverse=True):
-                if filter_str and filter_str not in str([row[1], row[2]]):
+                if filter_str and filter_str not in str([row[0].upper(), row[1].upper()]):
                     continue
                 if cnt < max_rows or not max_rows:
                     cnt += 1
@@ -1575,26 +1691,27 @@ class G2CmdShell(cmd.Cmd):
                     colorizedMatchKey = colorize_match_data({'matchKey': row[2], 'ruleCode': row[1]})
                 else:
                     colorizedMatchKey = f'{len(all_rows)-max_rows} more match keys'
-                tblRows.append([row[0], colorizedMatchKey, row[3]])
+                tblRows.append([row[0], colorizedMatchKey, fmtStatistic(row[3])])
 
             self.renderTable(tblTitle, tblColumns, tblRows)
             if len(report_rows) < len(all_rows):
-                prompt = colorize_prompt('Select Index # to review, (A)ll match keys, (Q)uit... ')
+                prompt = colorize_prompt('Select Index # to review, show (A)ll matchkeys, matchkey filter expression, (Q)uit... ')
             else:
-                prompt = colorize_prompt('Select Index # to review, (Q)uit ... ')
+                prompt = colorize_prompt('Select Index # to review, matchkey filter expression, (Q)uit ... ')
             reply = input(prompt)
             if reply:
                 removeFromHistory()
-                if reply.upper().startswith('Q'):
+                if reply.upper()in ('Q', 'QUIT'):
                     return None
                 if reply.isdigit() and int(reply) > 0 and int(reply) <= len(tblRows):
                     return report_rows[int(reply)-1]
                 if reply.upper() == 'A':
                     max_rows = 0
+                    filter_str = None
                 else:
                     filter_str = reply.upper()
-            else:
-                filter_str = None
+            #else:
+            #    filter_str = None
 
     # ---------------------------
     def help_principlesUsed(self):
@@ -1658,7 +1775,7 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
             tblRows = []
             for category in sorted(self.statsByCategory.keys(), key=lambda k: self.categorySortOrder[k]):
-                tblRows.append([colorize(category, categoryColors[category]), self.statsByCategory[category]['COUNT']])
+                tblRows.append([colorize(category, categoryColors[category]), fmtStatistic(self.statsByCategory[category]['COUNT'])])
             self.renderTable(tblTitle, tblColumns, tblRows)
 
         elif arg.upper().startswith('PRIN'):
@@ -1670,7 +1787,7 @@ class G2CmdShell(cmd.Cmd):
             tblRows = []
             for principle in sorted(self.statsByPrinciple.keys()):
                 category = self.statsByPrinciple[principle]['CATEGORY']
-                tblRows.append([colorize(principle, categoryColors[category]), colorize(category, categoryColors[category]), self.statsByPrinciple[principle]['COUNT']])
+                tblRows.append([colorize(principle, categoryColors[category]), colorize(category, categoryColors[category]), fmtStatistic(self.statsByPrinciple[principle]['COUNT'])])
             self.renderTable(tblTitle, tblColumns, tblRows)
 
         elif arg.upper() in self.statsByCategory:
@@ -1688,6 +1805,23 @@ class G2CmdShell(cmd.Cmd):
             print_message(f"Invalid parameter", 'error')
             self.help_principlesUsed()
 
+        # clean up the disclosure match keys
+        if report_data and category == 'DISCLOSED_RELATION':
+            principle = 'DISCLOSURE'
+            new_report_data = {principle: {}}
+            for matchKey in report_data[principle]:
+                count = report_data[principle][matchKey]['COUNT']
+                sample = report_data[principle][matchKey]['SAMPLE']
+                disclosures, plus_keys, minus_keys = self.categorizeMatchkey(matchKey, from_database=True)
+                for disclosure in disclosures:
+                    if disclosure not in new_report_data[principle]:
+                        new_report_data[principle][disclosure] = {'COUNT': count, 'SAMPLE': sample}
+                    else:
+                        new_report_data[principle][disclosure]['COUNT'] += count
+                        new_report_data[principle][disclosure]['SAMPLE'].extend(sample)
+            report_data = new_report_data
+
+
         if report_data:
             matchLevelCode = category + '_SAMPLE'
             while True:
@@ -1702,7 +1836,7 @@ class G2CmdShell(cmd.Cmd):
                     self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {category} on {colorizedMatchKey}"
                     currentRecords = str(sampleRecords[currentSample]).split()
                     if matchLevelCode == 'MATCH_SAMPLE':
-                        returnCode = self.do_get(currentRecords[0])
+                        returnCode = self.do_get('detail ' + currentRecords[0])
                     else:
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
                             for this_entity_id in currentRecords:
@@ -1765,6 +1899,28 @@ class G2CmdShell(cmd.Cmd):
             dataSourceSummary                               {colorize('with no parameters displays the overall stats', 'dim')}
             dataSourceSummary <dataSourceCode> <matchLevel> {colorize('where 0=Singletons, 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
         '''))
+
+    # ---------------------------
+    def complete_dataSourceSummary(self, text, line, begidx, endidx):
+        before_arg = line.rfind(" ", 0, begidx)
+        # if before_arg == -1:
+        #    return # arg not found
+
+        fixed = line[before_arg + 1:begidx]  # fixed portion of the arg
+        arg = line[before_arg + 1:endidx]
+
+        spaces = line.count(' ')
+        if spaces <= 1:
+            possibles = []
+            if self.snapshotData:
+                for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
+                    possibles.append(dataSource)
+        elif spaces == 2:
+            possibles = ['singles', 'duplicates', 'matches', 'ambiguous', 'possibles', 'relationships']
+        else:
+            possibles = []
+
+        return [i for i in possibles if i.lower().startswith(arg.lower())]
 
     # ---------------------------
     def do_dataSourceSummary(self, arg):
@@ -1855,7 +2011,7 @@ class G2CmdShell(cmd.Cmd):
                     self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelBase} on {colorizedMatchKey} in {dataSource}"
                     currentRecords = str(sampleRecords[currentSample]).split()
                     if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                        returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource])
+                        returnCode = self.do_get('detail ' + currentRecords[0], dataSourceFilter=[dataSource])
                     else:
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
                             for this_entity_id in currentRecords:
@@ -1875,7 +2031,7 @@ class G2CmdShell(cmd.Cmd):
 
                     while True:
                         if matchLevelCode in ('SINGLE_SAMPLE', 'DUPLICATE_SAMPLE'):
-                            reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
+                            reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (H)ow, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
                             special_actions = 'DHWE'
                         else:
                             reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
@@ -1909,10 +2065,22 @@ class G2CmdShell(cmd.Cmd):
             self.currentReviewList = None
 
     # ---------------------------
-    def complete_dataSourceSummary(self, text, line, begidx, endidx):
+    def help_crossSourceSummary(self):
+        print(textwrap.dedent(f'''\
+
+        Displays the statistics for the different match levels across data sources.
+
+        {colorize('Syntax:', 'highlight2')}
+            crossSourceSummary                                           {colorize('with no parameters displays the overall stats', 'dim')}
+            crossSourceSummary <dataSource1>                             {colorize('displays the cross matches for that data source only', 'dim')}
+            crossSourceSummary <dataSource1> <dataSource2> <matchLevel>  {colorize('where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
+        '''))
+
+    # ---------------------------
+    def complete_crossSourceSummary(self, text, line, begidx, endidx):
         before_arg = line.rfind(" ", 0, begidx)
-        # if before_arg == -1:
-        #    return # arg not found
+        if before_arg == -1:
+            return  # arg not found
 
         fixed = line[before_arg + 1:begidx]  # fixed portion of the arg
         arg = line[before_arg + 1:endidx]
@@ -1924,23 +2092,16 @@ class G2CmdShell(cmd.Cmd):
                 for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
                     possibles.append(dataSource)
         elif spaces == 2:
+            possibles = []
+            if self.snapshotData:
+                for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
+                    possibles.append(dataSource)
+        elif spaces == 3:
             possibles = ['singles', 'duplicates', 'matches', 'ambiguous', 'possibles', 'relationships']
         else:
             possibles = []
 
         return [i for i in possibles if i.lower().startswith(arg.lower())]
-
-    # ---------------------------
-    def help_crossSourceSummary(self):
-        print(textwrap.dedent(f'''\
-
-        Displays the statistics for the different match levels across data sources.
-
-        {colorize('Syntax:', 'highlight2')}
-            crossSourceSummary                                           {colorize('with no parameters displays the overall stats', 'dim')}
-            crossSourceSummary <dataSource1>                             {colorize('displays the cross matches for that data source only', 'dim')}
-            crossSourceSummary <dataSource1> <dataSource2> <matchLevel>  {colorize('where 1=Matches, 2=Ambiguous, 3=Possibles, 4=Relationships', 'dim')}
-        '''))
 
     # ---------------------------
     def do_crossSourceSummary(self, arg):
@@ -2036,7 +2197,7 @@ class G2CmdShell(cmd.Cmd):
                     self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {matchLevelBase} on {colorizedMatchKey} between {dataSource1} and {dataSource2}"
                     currentRecords = str(sampleRecords[currentSample]).split()
                     if matchLevelCode in ('MATCH_SAMPLE'):
-                        returnCode = self.do_get(currentRecords[0], dataSourceFilter=[dataSource1, dataSource2])
+                        returnCode = self.do_get('detail ' + currentRecords[0], dataSourceFilter=[dataSource1, dataSource2])
                     else:
                         if matchLevelCode == 'AMBIGUOUS_MATCH_SAMPLE':
                             for this_entity_id in currentRecords:
@@ -2055,7 +2216,7 @@ class G2CmdShell(cmd.Cmd):
 
                     while True:
                         if matchLevelCode in ('MATCH_SAMPLE'):
-                            reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (D)etail, (H)ow, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
+                            reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (H)ow, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
                             special_actions = 'DHWE'
                         else:
                             reply = input(colorize_prompt('Select (P)revious, (N)ext, (G)oto, (W)hy, (E)xport, (S)croll, (Q)uit ...'))
@@ -2087,33 +2248,6 @@ class G2CmdShell(cmd.Cmd):
             self.currentReviewList = None
 
     # ---------------------------
-    def complete_crossSourceSummary(self, text, line, begidx, endidx):
-        before_arg = line.rfind(" ", 0, begidx)
-        if before_arg == -1:
-            return  # arg not found
-
-        fixed = line[before_arg + 1:begidx]  # fixed portion of the arg
-        arg = line[before_arg + 1:endidx]
-
-        spaces = line.count(' ')
-        if spaces <= 1:
-            possibles = []
-            if self.snapshotData:
-                for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
-                    possibles.append(dataSource)
-        elif spaces == 2:
-            possibles = []
-            if self.snapshotData:
-                for dataSource in sorted(self.snapshotData['DATA_SOURCES']):
-                    possibles.append(dataSource)
-        elif spaces == 3:
-            possibles = ['singles', 'duplicates', 'matches', 'ambiguous', 'possibles', 'relationships']
-        else:
-            possibles = []
-
-        return [i for i in possibles if i.lower().startswith(arg.lower())]
-
-    # ---------------------------
     def help_search(self):
         print(textwrap.dedent(f'''\
 
@@ -2130,7 +2264,6 @@ class G2CmdShell(cmd.Cmd):
             Searching by name alone may not locate a specific entity.
             Try adding a date of birth, address, or phone number if not found by name alone.
         '''))
-
 
     # ---------------------------
     def do_search(self, arg):
@@ -2323,7 +2456,6 @@ class G2CmdShell(cmd.Cmd):
             {colorize('Add the keyword ', 'dim')}ALL{colorize(' to display all the attributes of the entity if there are more than 50.', 'dim')}
         '''))
 
-
     # ---------------------------
     def do_get(self, arg, **kwargs):
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
@@ -2501,23 +2633,6 @@ class G2CmdShell(cmd.Cmd):
 
         return 0
 
-
-    # ---------------------------
-    def do_next(self, arg):
-        self.find(1, arg)
-    def do_n(self, arg):
-        removeFromHistory()
-        self.do_next(arg)
-
-
-    # ---------------------------
-    def do_previous(self, arg):
-        self.find(-1, arg)
-    def do_p(self, arg):
-        removeFromHistory()
-        self.do_previous(arg)
-
-
     # ---------------------------
     def find(self, step, arg):
         startingID = 0
@@ -2565,6 +2680,19 @@ class G2CmdShell(cmd.Cmd):
                         print_message(f'search for next abandoned after 100k tries', 'error')
                     break
 
+    # ---------------------------
+    def do_next(self, arg):
+        self.find(1, arg)
+    def do_n(self, arg):
+        removeFromHistory()
+        self.do_next(arg)
+
+    # ---------------------------
+    def do_previous(self, arg):
+        self.find(-1, arg)
+    def do_p(self, arg):
+        removeFromHistory()
+        self.do_previous(arg)
 
     # ---------------------------
     def formatRecords(self, recordList, reportType, showAll):
@@ -2752,7 +2880,6 @@ class G2CmdShell(cmd.Cmd):
             compare search                      {colorize('places all the search results side by side', 'dim')}
             compare search <top (n)>            {colorize('places the top (n) search results side by side', 'dim')}
        '''))
-
 
     # ---------------------------
     def do_compare(self, arg, **kwargs):
@@ -3214,7 +3341,7 @@ class G2CmdShell(cmd.Cmd):
         return None
 
     # ---------------------------
-    def categorizeMatchkey(self, match_key):
+    def categorizeMatchkey(self, match_key, **kwargs):
         # match_key example:
         #  'SOME_REL_DOMAIN(FATHER,SPOUSE:SON,SPOUSE)+ADDRESS+PHONE-DOB (Ambiguous)'
         match_key = match_key.replace(' (Ambiguous)', '')
@@ -3222,6 +3349,7 @@ class G2CmdShell(cmd.Cmd):
         plus_keys = []
         minus_keys = []
         key_list = re.split('(\+|\-)', match_key)
+        all_disclosures = []
 
         i = 1
         while i < len(key_list):
@@ -3233,19 +3361,35 @@ class G2CmdShell(cmd.Cmd):
                     plus_keys.append(this_key)
                 # disclosed
                 else:
-                    both_side_roles = this_key[this_key.find('(') + 1:this_key.find(')')].split(':')
-                    # left side of colon is from this entity's point of view
-                    # but if blank, must use right side as both sides not required
-                    roles_to_use = both_side_roles[0] if both_side_roles[0] else both_side_roles[1]
-                    disclosed_keys += roles_to_use.split(',')
+                    if kwargs.get('from_database') == True:
+                        # format: REL_POINTER(DOMAIN:|MIN:|MAX:PRINCIPAL)
+                        try:
+                            l1 = this_key.find('DOMAIN:')
+                            l2 = this_key.find('MIN:')
+                            l3 = this_key.find('MAX:')
+                            domain = this_key[l1+7:l2-1]
+                            role1 = this_key[l2+4:l3-1]
+                            role2 = this_key[l3+4:-1]
+                            all_disclosures.append(f'{domain}({role1}:{role2})')
+                        except:
+                            print(this_key)
+                    else:
+                        # format: DOMAIN(ROLE:ROLE)
+                        both_side_roles = this_key[this_key.find('(') + 1:this_key.find(')')].split(':')
+                        # left side of colon is from this entity's point of view
+                        # but if blank, must use right side as both sides not required
+                        roles_to_use = both_side_roles[0] if both_side_roles[0] else both_side_roles[1]
+                        disclosed_keys += roles_to_use.split(',')
             elif key_list[i] in ('-'):
                 i += 1
                 this_key = key_list[i]
                 minus_keys.append(this_key)
 
             i += 1
-
-        return disclosed_keys, plus_keys, minus_keys
+        if kwargs.get('from_database') == True:
+            return all_disclosures, plus_keys, minus_keys
+        else:
+            return disclosed_keys, plus_keys, minus_keys
 
     # ---------------------------
     def help_why(self):
@@ -4623,7 +4767,6 @@ class G2CmdShell(cmd.Cmd):
 
         return
 
-
     # ---------------------------
     def get_virtual_entity_data(self, raw_virtual_entity_data, features_by_record):
         virtual_entity_data = {'id': raw_virtual_entity_data['VIRTUAL_ENTITY_ID']}
@@ -4697,7 +4840,6 @@ class G2CmdShell(cmd.Cmd):
             Use the keyword "force" to force the two records to find each other by adding a trusted_id.
         '''))
 
-
     # ---------------------------
     def do_score(self, arg):
         if not arg:
@@ -4763,7 +4905,6 @@ class G2CmdShell(cmd.Cmd):
         {colorize('Example:', 'highlight2')}
             assign trusted_id_number 1001 to 7 "ABC Company"
         '''))
-
 
     # ---------------------------
     def do_assign(self, arg):
@@ -5151,12 +5292,10 @@ class G2CmdShell(cmd.Cmd):
 
         # try pipe to less on small enough files (pipe buffer usually 1mb and fills up on large entity displays)
         less = subprocess.Popen(["less", lessOptions], stdin=subprocess.PIPE)
-        try:
-            less.stdin.write(self.currentRenderString.encode('utf-8'))
-        except IOError:
-            pass
-        less.stdin.close()
-        less.wait()
+        with suppress(Exception):
+            less.stdin.write(self.currentRenderString.encode())
+            less.stdin.close()
+            less.wait()
         print()
 
     # -----------------------------
@@ -5172,7 +5311,7 @@ class G2CmdShell(cmd.Cmd):
         # try pipe to less on small enough files (pipe buffer usually 1mb and fills up on large entity displays)
         less = subprocess.Popen(["less", "-FMXSR"], stdin=subprocess.PIPE)
         try:
-            less.stdin.write(self.currentRenderString.encode('utf-8'))
+            less.stdin.write(self.currentRenderString.encode())
         except IOError:
             pass
         less.stdin.close()
