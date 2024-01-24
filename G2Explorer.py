@@ -280,7 +280,7 @@ def colorize_match_data(matchDict):
         badSegments = []
         priorKey = ''
         keyColor = 'fg_green'
-        for key in re.split('(\+|\-)', matchDict['matchKey']):
+        for key in re.split(r'(\+|\-)', matchDict['matchKey']):
             if key in ('+', ''):
                 priorKey = '+'
             elif key == '-':
@@ -1576,8 +1576,8 @@ class G2CmdShell(cmd.Cmd):
 
         filter_str = arg 
         while True:
-
-            tblTitle = 'Multi Source Summary from %s' % self.snapshotFile
+            filter_display = f', filtered for "{filter_str}"' if filter_str else ''
+            tblTitle = f'Multi Source Summary from {self.snapshotFile}{filter_display}'
             tblColumns = []
             tblColumns.append({'name': 'Index', 'width': 5, 'align': 'center'})
             tblColumns.append({'name': 'Data Sources', 'width': 100, 'align': 'left'})
@@ -1602,7 +1602,7 @@ class G2CmdShell(cmd.Cmd):
             self.renderTable(tblTitle, tblColumns, tblRows)
 
             sampleRecords = None
-            prompt = colorize_prompt('Select Index # to review, (Q)uit ... ')
+            prompt = colorize_prompt('Select Index # to review, data source filter expression, (Q)uit ... ')
             reply = input(prompt)
             if reply:
                 removeFromHistory()
@@ -1682,7 +1682,8 @@ class G2CmdShell(cmd.Cmd):
                     report_rows[-1][3] += row[2]
                     report_rows[-1][4].extend(row[3])
 
-            tblTitle = f"{prior_header} {('filtered for ') + filter_str if filter_str else ''}"
+            filter_display = f', filtered for "{filter_str}"' if filter_str else ''
+            tblTitle = f'{prior_header}{filter_display}'
             tblColumns = []
             tblColumns.append({'name': 'Index', 'width': 5, 'align': 'center'})
             tblColumns.append({'name': 'Match key', 'width': 50, 'align': 'left'})
@@ -1741,7 +1742,7 @@ class G2CmdShell(cmd.Cmd):
         possibles = list(self.categorySortOrder.keys())
         possibles.append('PRINCIPLES')
         if hasattr(self, 'statsByPrinciple'):
-            possibles.extend(list(self.statsByPrinciple.keys()))
+            possibles.extend(list(statsByPrinciple.keys()))
 
         return [i for i in possibles if i.lower().startswith(arg.lower())]
 
@@ -1758,16 +1759,16 @@ class G2CmdShell(cmd.Cmd):
                           'POSSIBLY_RELATED': 'RELATED',
                           'DISCLOSED_RELATION': 'DISCLOSED, DIM'}
 
-        self.statsByCategory = {}
-        self.statsByPrinciple = {}
+        statsByCategory = {}
+        statsByPrinciple = {}
         for category in self.snapshotData['PRINCIPLES_USED'].keys(): #, key=lambda k: self.categorySortOrder[k]):
-            if category not in self.statsByCategory:
-                self.statsByCategory[category] = {'COUNT': 0}
+            if category not in statsByCategory:
+                statsByCategory[category] = {'COUNT': 0}
             for principle in self.snapshotData['PRINCIPLES_USED'][category].keys():
-                self.statsByPrinciple[principle] = {'COUNT': 0, 'CATEGORY': category}
+                statsByPrinciple[principle] = {'COUNT': 0, 'CATEGORY': category}
                 for matchKey in self.snapshotData['PRINCIPLES_USED'][category][principle].keys():
-                    self.statsByCategory[category]['COUNT'] += self.snapshotData['PRINCIPLES_USED'][category][principle][matchKey]['COUNT']
-                    self.statsByPrinciple[principle]['COUNT'] += self.snapshotData['PRINCIPLES_USED'][category][principle][matchKey]['COUNT']
+                    statsByCategory[category]['COUNT'] += self.snapshotData['PRINCIPLES_USED'][category][principle][matchKey]['COUNT']
+                    statsByPrinciple[principle]['COUNT'] += self.snapshotData['PRINCIPLES_USED'][category][principle][matchKey]['COUNT']
 
         report_data = None
         if not arg:
@@ -1776,8 +1777,8 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': 'Category', 'width': 25, 'align': 'left'})
             tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
             tblRows = []
-            for category in sorted(self.statsByCategory.keys(), key=lambda k: self.categorySortOrder[k]):
-                tblRows.append([colorize(category, categoryColors[category]), fmtStatistic(self.statsByCategory[category]['COUNT'])])
+            for category in sorted(statsByCategory.keys(), key=lambda k: self.categorySortOrder[k]):
+                tblRows.append([colorize(category, categoryColors[category]), fmtStatistic(statsByCategory[category]['COUNT'])])
             self.renderTable(tblTitle, tblColumns, tblRows)
 
         elif arg.upper().startswith('PRIN'):
@@ -1787,19 +1788,19 @@ class G2CmdShell(cmd.Cmd):
             tblColumns.append({'name': 'Category', 'width': 25, 'align': 'left'})
             tblColumns.append({'name': 'Count', 'width': 25, 'align': 'right'})
             tblRows = []
-            for principle in sorted(self.statsByPrinciple.keys()):
-                category = self.statsByPrinciple[principle]['CATEGORY']
-                tblRows.append([colorize(principle, categoryColors[category]), colorize(category, categoryColors[category]), fmtStatistic(self.statsByPrinciple[principle]['COUNT'])])
+            for principle in sorted(statsByPrinciple.keys()):
+                category = statsByPrinciple[principle]['CATEGORY']
+                tblRows.append([colorize(principle, categoryColors[category]), colorize(category, categoryColors[category]), fmtStatistic(statsByPrinciple[principle]['COUNT'])])
             self.renderTable(tblTitle, tblColumns, tblRows)
 
-        elif arg.upper() in self.statsByCategory:
+        elif arg.upper() in statsByCategory:
             category = arg.upper()
             header = f"Principles used for {category} across all data sources"
             report_data = self.snapshotData['PRINCIPLES_USED'][category]
 
-        elif arg.upper() in self.statsByPrinciple:
+        elif arg.upper() in statsByPrinciple:
             principle = arg.upper()
-            category = self.statsByPrinciple[principle]['CATEGORY']
+            category = statsByPrinciple[principle]['CATEGORY']
             header = f"Principles used for {principle} across all data sources"
             report_data = {principle: self.snapshotData['PRINCIPLES_USED'][category][principle]}
 
@@ -3350,7 +3351,7 @@ class G2CmdShell(cmd.Cmd):
         disclosed_keys = []
         plus_keys = []
         minus_keys = []
-        key_list = re.split('(\+|\-)', match_key)
+        key_list = re.split(r'(\+|\-)', match_key)
         all_disclosures = []
 
         i = 1
@@ -3363,7 +3364,7 @@ class G2CmdShell(cmd.Cmd):
                     plus_keys.append(this_key)
                 # disclosed
                 else:
-                    if kwargs.get('from_database') == True:
+                    if kwargs.get('from_database') is True:
                         # format: REL_POINTER(DOMAIN:|MIN:|MAX:PRINCIPAL)
                         try:
                             l1 = this_key.find('DOMAIN:')
@@ -3388,7 +3389,7 @@ class G2CmdShell(cmd.Cmd):
                 minus_keys.append(this_key)
 
             i += 1
-        if kwargs.get('from_database') == True:
+        if kwargs.get('from_database') is True:
             return all_disclosures, plus_keys, minus_keys
         else:
             return disclosed_keys, plus_keys, minus_keys
@@ -5261,7 +5262,7 @@ class G2CmdShell(cmd.Cmd):
         if self.current_settings['auto_scroll'] == 'off' and not from_how_or_why:
             screen_width= os.get_terminal_size()[0]-1
             for line in self.currentRenderString.split('\n'):
-                if len(re.sub("\\x1b\[\d*;\d*;\d*m", "", line)) < screen_width:
+                if len(re.sub(r'\\x1b\[\d*;\d*;\d*m', '', line)) < screen_width:
                     print(f" {line}")
                 else:
                     nline = ''
