@@ -38,11 +38,9 @@ except Exception as err:
     print(f"\n{err}\n")
     sys.exit(1)
 
-try: # in case they are using a G2Module.ini file 
+with suppress(Exception): 
     import G2Paths
     from G2IniParams import G2IniParams
-except:
-    pass
 
 # ---------------------------
 def execute_api_call(api_name, flag_list, parm_list):
