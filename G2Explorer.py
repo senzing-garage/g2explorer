@@ -33,12 +33,16 @@ except:
     sys.exit(1)
 
 try:
-    import G2Paths
-    from G2IniParams import G2IniParams
     from senzing import G2ConfigMgr, G2Diagnostic, G2Engine, G2EngineFlags, G2Exception, G2Product
 except Exception as err:
     print(f"\n{err}\n")
     sys.exit(1)
+
+try: # in case they are using a G2Module.ini file 
+    import G2Paths
+    from G2IniParams import G2IniParams
+except:
+    pass
 
 # ---------------------------
 def execute_api_call(api_name, flag_list, parm_list):
