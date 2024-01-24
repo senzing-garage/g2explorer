@@ -1567,8 +1567,8 @@ class G2CmdShell(cmd.Cmd):
 
     # ---------------------------
     def do_multiSourceSummary(self, arg):
-        if not self.snapshotData or 'DATA_SOURCES' not in self.snapshotData:
-            print_message('Please load a json file created with G2Snapshot.py to use this command', 'warning')
+        if not self.snapshotData or not self.snapshotData.get('MULTI_SOURCE'):
+            print_message('Please create and new shopshot with the latest G2Snapshot.py to access this report', 'error')
             return
         if len(self.snapshotData['MULTI_SOURCE']) == 0:
             print_message('No multi-source entities exist!', 'warning')
@@ -1750,7 +1750,7 @@ class G2CmdShell(cmd.Cmd):
     def do_principlesUsed(self, arg):
 
         if not self.snapshotData or not self.snapshotData.get('PRINCIPLES_USED'):
-            print_message('Please load a json file created with G2Snapshot.py to access this report', 'warning')
+            print_message('Please create and new shopshot with the latest G2Snapshot.py to access this report', 'error')
             return
 
         categoryColors = {'MATCH': 'MATCH',
@@ -2659,7 +2659,6 @@ class G2CmdShell(cmd.Cmd):
                 if data_source:
                     found = False
                     for record in resolvedJson['RESOLVED_ENTITY']['RECORD_SUMMARY']:
-                        #print(record['DATA_SOURCE'])
                         if record['DATA_SOURCE'].startswith(data_source):
                             found = True
                             break
