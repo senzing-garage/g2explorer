@@ -1568,7 +1568,7 @@ class G2CmdShell(cmd.Cmd):
     # ---------------------------
     def do_multiSourceSummary(self, arg):
         if not self.snapshotData or not self.snapshotData.get('MULTI_SOURCE'):
-            print_message('Please create and new shopshot with the latest G2Snapshot.py to access this report', 'error')
+            print_message('Please create a new shopshot with the latest G2Snapshot.py to access this report', 'error')
             return
         if len(self.snapshotData['MULTI_SOURCE']) == 0:
             print_message('No multi-source entities exist!', 'warning')
@@ -1750,7 +1750,7 @@ class G2CmdShell(cmd.Cmd):
     def do_principlesUsed(self, arg):
 
         if not self.snapshotData or not self.snapshotData.get('PRINCIPLES_USED'):
-            print_message('Please create and new shopshot with the latest G2Snapshot.py to access this report', 'error')
+            print_message('Please create a new shopshot with the latest G2Snapshot.py to access this report', 'error')
             return
 
         categoryColors = {'MATCH': 'MATCH',
