@@ -4011,7 +4011,8 @@ class G2CmdShell(cmd.Cmd):
         return features
 
     # ---------------------------
-    def whyAddMatchInfo(self, features, matchInfo):
+    def whyAddMatchInfo(self, features, matchInfo, default_side = 'INBOUND'):
+        other_side = 'CANDIDATE' if default_side == 'INBOUND' else 'INBOUND'
 
         whyKey = {}
         whyKey['matchKey'] = matchInfo['WHY_KEY']
@@ -4039,18 +4040,19 @@ class G2CmdShell(cmd.Cmd):
             ftypeId = self.ftypeCodeLookup[ftypeCode]['FTYPE_ID']
             bestScoreRecord = {}
             for featRecord in matchInfo['FEATURE_SCORES'][ftypeCode]:
+                #if featRecord.get('scoringWasSuppressed','No') == 'Yes':
+                #    continue
                 # BUG WHERE INBOUND/CANDIDATE IS SOMETIMES REVERSED...
-                if featRecord['INBOUND_FEAT_ID'] in features:
-                    libFeatId = featRecord['INBOUND_FEAT_ID']
-                    libFeatDesc = featRecord['INBOUND_FEAT']
-                    matchedFeatId = featRecord['CANDIDATE_FEAT_ID']
-                    matchedFeatDesc = featRecord['CANDIDATE_FEAT']
-                elif featRecord['CANDIDATE_FEAT_ID'] in features:
-                    # print(entityId, featRecord)
-                    libFeatId = featRecord['CANDIDATE_FEAT_ID']
-                    libFeatDesc = featRecord['CANDIDATE_FEAT']
-                    matchedFeatId = featRecord['INBOUND_FEAT_ID']
-                    matchedFeatDesc = featRecord['INBOUND_FEAT']
+                if featRecord[default_side + '_FEAT_ID'] in features:
+                    libFeatId = featRecord[default_side + '_FEAT_ID']
+                    libFeatDesc = featRecord[default_side + '_FEAT']
+                    matchedFeatId = featRecord[other_side + '_FEAT_ID']
+                    matchedFeatDesc = featRecord[other_side + '_FEAT_ID']
+                elif featRecord[other_side + '_FEAT_ID'] in features:
+                    libFeatId = featRecord[other_side + '_FEAT_ID']
+                    libFeatDesc = featRecord[other_side + '_FEAT']
+                    matchedFeatId = featRecord[default_side + '_FEAT_ID']
+                    matchedFeatDesc = featRecord[default_side + '_FEAT_ID']
                 else:
                     print('warning: scored feature %s not in either record!' % libFeatId)
                     continue
@@ -4073,6 +4075,7 @@ class G2CmdShell(cmd.Cmd):
             if bestScoreRecord:  # and bestScoreRecord['libFeatId'] in features) or not : #--adjusted for how
                 libFeatId = bestScoreRecord['libFeatId']
                 if libFeatId not in features:  # adjusted for how
+                    #input(f'hit how adjustment on {libFeatId}, press any key')
                     features[libFeatId] = {}
                 features[libFeatId]['libFeatId'] = libFeatId
                 features[libFeatId]['ftypeId'] = ftypeId
@@ -4224,10 +4227,8 @@ class G2CmdShell(cmd.Cmd):
 
         entity_name = getEntityData['RESOLVED_ENTITY'].get('ENTITY_NAME', 'name not mapped')
         how_header = '\n' + colorize(f"How report for entity {colorize_entity(entity_id)}: {entity_name}", 'table_title') + '\n'
-        if json_data['HOW_RESULTS']['FINAL_STATE'].get('NEED_REEVALUATION', 0) or \
-           len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']) > 1:
+        if json_data['HOW_RESULTS']['FINAL_STATE'].get('NEED_REEVALUATION', 0) or len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']) > 1:
             final_entity_count = len(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES'])
-            #print(json.dumps(json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES'], indent=4))
             how_header += '\n' + colorize(f'{final_entity_count} final entities, reevaluation needed!', 'bad') + '\n'
             # - maybe start with concise view if multiple
             # if how_display_level == 'overview'
@@ -4248,9 +4249,10 @@ class G2CmdShell(cmd.Cmd):
             step_data['MATCH_INFO']['WHY_KEY'] = step_data['MATCH_INFO']['MATCH_KEY']
             step_data['MATCH_INFO']['WHY_ERRULE_CODE'] = step_data['MATCH_INFO']['ERRULE_CODE']
             for virtual_entity_num in ['VIRTUAL_ENTITY_1', 'VIRTUAL_ENTITY_2']:
+                default_side = 'INBOUND' if step_data['INBOUND_VIRTUAL_ENTITY_ID'] == step_data[virtual_entity_num]['VIRTUAL_ENTITY_ID'] else 'CANDIDATE'
                 step_data[virtual_entity_num].update(self.get_virtual_entity_data(step_data[virtual_entity_num], features_by_record))
                 features = step_data[virtual_entity_num]['features']
-                why_key, features = self.whyAddMatchInfo(features, step_data['MATCH_INFO'])
+                why_key, features = self.whyAddMatchInfo(features, step_data['MATCH_INFO'], default_side)
                 step_data[virtual_entity_num]['features'] = features
 
             step_data['singleton_nodes'] = []
@@ -4335,7 +4337,7 @@ class G2CmdShell(cmd.Cmd):
         render_node_list = []
         for final_virtual_data in json_data['HOW_RESULTS']['FINAL_STATE']['VIRTUAL_ENTITIES']:
             final_virtual_id = final_virtual_data['VIRTUAL_ENTITY_ID']
-            render_node_list.append({'node_id': final_virtual_id, 'parent_node': 'root'})
+            render_node_list.append({'node_id': final_virtual_id, 'parent_node': 'root', 'step_num': 999999})
 
             current_aggregate_list = [final_virtual_id]
             while current_aggregate_list:
@@ -4360,8 +4362,9 @@ class G2CmdShell(cmd.Cmd):
                     current_aggregate_list.pop()
                     if len(resolution_steps[prior_step]['aggregate_nodes']) == 2:
                         for aggregate_node_id in resolution_steps[prior_step]['aggregate_nodes']:
+                            step_num = int(aggregate_node_id[aggregate_node_id.find('S')+1:]) if 'S' in aggregate_node_id else 0
                             current_aggregate_list.append(aggregate_node_id)
-                            render_node_list.append({'node_id': aggregate_node_id, 'parent_node': current_node_id})
+                            render_node_list.append({'node_id': aggregate_node_id, 'parent_node': current_node_id, 'step_num': step_num})
 
         # create overview tree
         summary_node = Node('summary')
@@ -4473,7 +4476,7 @@ class G2CmdShell(cmd.Cmd):
         while True:
             tree_nodes['root'] = Node('root')
             tree_nodes['root'].node_desc = colorize('RESOLUTION STEPS', 'bold')
-            for render_node_data in render_node_list:
+            for render_node_data in sorted(render_node_list, key=lambda x: x['step_num'], reverse=True):
                 render_node_id = render_node_data['node_id']
                 parent_node_id = render_node_data['parent_node']
 
@@ -4546,7 +4549,7 @@ class G2CmdShell(cmd.Cmd):
                                         right_matching_record_list[record_key].append(matched_feat_id)
                                 else:
                                     record_key = 'MISSING!'
-                                    input(f"note: step {step_num}, right side missing {lib_feat_id} {left_features[lib_feat_id].get('ftypeCode', '?')} \"{left_features[lib_feat_id].get('featDesc', '?')}\", press any key ...")
+                                    input(f"note1: step {step_num}, right side missing {lib_feat_id} {left_features[lib_feat_id].get('ftypeCode', '?')} \"{left_features[lib_feat_id].get('featDesc', '?')}\", press any key ...")
                                     if record_key not in right_matching_record_list:
                                         right_matching_record_list[record_key] = []
                                     right_matching_record_list[record_key].append(matched_feat_id)
