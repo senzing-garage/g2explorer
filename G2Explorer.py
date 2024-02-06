@@ -4047,12 +4047,12 @@ class G2CmdShell(cmd.Cmd):
                     libFeatId = featRecord[default_side + '_FEAT_ID']
                     libFeatDesc = featRecord[default_side + '_FEAT']
                     matchedFeatId = featRecord[other_side + '_FEAT_ID']
-                    matchedFeatDesc = featRecord[other_side + '_FEAT_ID']
+                    matchedFeatDesc = featRecord[other_side + '_FEAT']
                 elif featRecord[other_side + '_FEAT_ID'] in features:
                     libFeatId = featRecord[other_side + '_FEAT_ID']
                     libFeatDesc = featRecord[other_side + '_FEAT']
                     matchedFeatId = featRecord[default_side + '_FEAT_ID']
-                    matchedFeatDesc = featRecord[default_side + '_FEAT_ID']
+                    matchedFeatDesc = featRecord[default_side + '_FEAT']
                 else:
                     print('warning: scored feature %s not in either record!' % libFeatId)
                     continue
