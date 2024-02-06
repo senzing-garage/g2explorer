@@ -1623,6 +1623,7 @@ class G2CmdShell(cmd.Cmd):
             currentSample = 0
             while True:
                 self.currentReviewList = f"Sample {currentSample + 1} of {len(sampleRecords)} for {dataSourcesList}"
+                currentRecords = str(sampleRecords[currentSample]).split()
                 returnCode = self.do_get(str(sampleRecords[currentSample]))
                 if returnCode != 0:
                     print_message('This entity no longer exists', 'error')
@@ -1665,7 +1666,6 @@ class G2CmdShell(cmd.Cmd):
             for matchKey in principle_data[principle].keys():
                 all_rows.append([principle, matchKey, principle_data[principle][matchKey]['COUNT'], principle_data[principle][matchKey]['SAMPLE']])
         max_rows = 10
-        print(len(all_rows))
         filter_str = None
         while True:
             cnt = 0
