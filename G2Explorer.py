@@ -2283,7 +2283,7 @@ class G2CmdShell(cmd.Cmd):
         print('\nSearching ...')
         searchJson = parmData
         searchFlagList = ['G2_SEARCH_INCLUDE_ALL_ENTITIES',
-                          'G2_SEARCH_INCLUDE_FEATURE_SCORES',
+                          'G2_INCLUDE_FEATURE_SCORES',
                           'G2_ENTITY_INCLUDE_ENTITY_NAME',
                           'G2_ENTITY_INCLUDE_RECORD_DATA',
                           'G2_SEARCH_INCLUDE_STATS',
@@ -2831,7 +2831,7 @@ class G2CmdShell(cmd.Cmd):
     def getAmbiguousEntitySet(self, entityId):
         # get other ambiguous relationships if this is the ambiguous entity
         getFlagList = ['G2_ENTITY_INCLUDE_ALL_FEATURES',
-                       'G2_ENTITY_OPTION_INCLUDE_INTERNAL_FEATURES',
+                       'G2_ENTITY_INCLUDE_INTERNAL_FEATURES',
                        'G2_ENTITY_INCLUDE_ALL_RELATIONS',
                        'G2_ENTITY_INCLUDE_RELATED_MATCHING_INFO']
         try:
@@ -3775,7 +3775,7 @@ class G2CmdShell(cmd.Cmd):
 
             # search for this entity to get the scores against the others
             searchFlagList = ['G2_SEARCH_INCLUDE_ALL_ENTITIES',
-                              'G2_SEARCH_INCLUDE_FEATURE_SCORES',
+                              'G2_INCLUDE_FEATURE_SCORES',
                               'G2_ENTITY_INCLUDE_ENTITY_NAME',
                               'G2_ENTITY_INCLUDE_RECORD_DATA']
             try:
@@ -4171,7 +4171,7 @@ class G2CmdShell(cmd.Cmd):
         # do get first
         getFlagList = ['G2_ENTITY_INCLUDE_ENTITY_NAME',
                        'G2_ENTITY_INCLUDE_ALL_FEATURES',
-                       'G2_ENTITY_OPTION_INCLUDE_FEATURE_STATS',
+                       'G2_ENTITY_INCLUDE_FEATURE_STATS',
                        'G2_ENTITY_INCLUDE_RECORD_FEATURE_IDS']
         
         try:
