@@ -28,6 +28,7 @@ disable=
     no-else-return,
     no-name-in-module,
     pointless-statement,
+    possibly-used-before-assignment,
     protected-access,
     raise-missing-from,
     redefined-builtin,
