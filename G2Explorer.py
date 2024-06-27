@@ -572,6 +572,7 @@ class G2CmdShell(cmd.Cmd):
 
     # ---------------------------
     def do_quit(self, arg):
+        removeFromHistory()
         return True
 
     # ---------------------------
@@ -1274,8 +1275,8 @@ class G2CmdShell(cmd.Cmd):
 
         statusSortOrder = {}
         statusSortOrder['same'] = '1'
-        statusSortOrder['new negative'] = '2'
-        statusSortOrder['new positive'] = '3'
+        statusSortOrder['new negative'] = '3'
+        statusSortOrder['new positive'] = '2'
         statusSortOrder['missing'] = '4'
 
         tblRows = []
@@ -2945,7 +2946,7 @@ class G2CmdShell(cmd.Cmd):
                     else:
                         entityData['dataSources'][record['DATA_SOURCE']] = [record['RECORD_ID']]
                 else:
-                    if dataSourceFilter and record['DATA_SOURCE'] in dataSourceFilter:
+                    if not dataSourceFilter or record['DATA_SOURCE'] in dataSourceFilter:
                         entityData['dataSources'][record['DATA_SOURCE']].append(record['RECORD_ID'])
 
                 if dataSourceFilter and record['DATA_SOURCE'] not in dataSourceFilter:
@@ -3018,10 +3019,10 @@ class G2CmdShell(cmd.Cmd):
         for entityData in compareList:
             dataSourcesList = []
             for dataSource in sorted(entityData['dataSources']):
-                for recordID in sorted(entityData['dataSources'][dataSource])[:5]:
-                    dataSourcesList.append(colorize_dsrc(dataSource + ': ' + recordID))
-                if len(entityData['dataSources'][dataSource]) > 5:
-                    dataSourcesList.append(dataSource + ': +%s more ' % str(len(entityData['dataSources'][dataSource]) - 5))
+                if len(entityData['dataSources'][dataSource]) == 1:
+                    dataSourcesList.append(colorize_dsrc(dataSource + ': ' + entityData['dataSources'][dataSource][0]))
+                else:
+                    dataSourcesList.append(colorize_dsrc(dataSource + ': ' + str(len(entityData['dataSources'][dataSource])) + ' records'))
             dataSourcesRow.append('\n'.join(dataSourcesList))
 
             nameDataRow.append('\n'.join([colorize_attr(x) for x in sorted(entityData['nameData'])]))
@@ -4912,7 +4913,7 @@ class G2CmdShell(cmd.Cmd):
         '''))
 
     # ---------------------------
-    def do_assign(self, arg):
+    def xx_assign(self, arg):
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
         if not arg:
             self.help_merge()
@@ -5010,7 +5011,7 @@ class G2CmdShell(cmd.Cmd):
 
 
     # ---------------------------
-    def do_merge(self, arg):
+    def xx_merge(self, arg):
         calledDirect = sys._getframe().f_back.f_code.co_name != 'onecmd'
         if not arg:
             self.help_merge()
