@@ -40,6 +40,7 @@ except Exception as err:
 
 with suppress(Exception): 
     import G2Paths
+    from G2Database import G2Database
     from G2IniParams import G2IniParams
 
 # ---------------------------
@@ -2252,6 +2253,152 @@ class G2CmdShell(cmd.Cmd):
             self.currentReviewList = None
 
     # ---------------------------
+    def featureSearch(self):
+        print(
+            textwrap.dedent(
+                f"""\
+
+        finds entities by feature description or id
+
+        {colorize('Syntax:', 'highlight2')}
+            featureSearch id 123
+            featureSearch address = 123 first str
+            featureSearch name like anderson
+
+        {colorize('Warning:', 'bad')}
+            featureSearch is intended to be used during smallish POCs to help find entities by feature ID or description when they are not returned by search.
+            featureSearch can take a long time and return a lot of entities!
+
+        """
+            )
+        )
+
+    # ---------------------------
+    def do_featureSearch(self, arg):
+        if not arg:
+            self.featureSearch()
+            return
+
+        if not g2Dbo:
+            print_message("Direct database access not available", "error")
+            return
+
+        arg = arg.replace("=", " = ")
+        ftype = operator = value = ""
+        for token in arg.split():
+            if not ftype:
+                ftype = token.upper()
+            elif not operator:
+                operator = token.upper()
+            else:
+                value += token + " "
+        value = value.strip()
+
+        if not ftype or not operator or not value:
+            print_message("Invalid syntax", "error")
+            return
+
+        if operator not in ("=", "LIKE"):
+            print_message('Operator can only be "=" or "like"', "error")
+            return
+
+        if ftype == "ID":
+            sub_select = f"select LIB_FEAT_ID, FTYPE_ID, FEAT_DESC from LIB_FEAT where LIB_FEAT_ID = {value}"
+        elif ftype in self.ftypeCodeLookup:
+            ftype_id = self.ftypeCodeLookup[ftype]["FTYPE_ID"]
+            if operator == 'LIKE':
+                if g2dbUri.startswith('postgres'):
+                    operator = 'ILIKE' # makes case insensitive
+                elif g2dbUri.startswith('sqlite'):
+                    g2Dbo.sqlExec('PRAGMA case_sensitive_like=OFF')
+                if '%' not in value:
+                    value = '%' + value + '%'
+            sub_select = f"select LIB_FEAT_ID, FTYPE_ID, FEAT_DESC from LIB_FEAT where FTYPE_ID = {ftype_id} and FEAT_DESC {operator} '{value}'"
+        else:
+            print_message(f"{ftype} is not a feature", "error")
+            return
+
+        print(sub_select)
+
+        tblRows = []
+        feat_cache = {}
+        feat_count = 0
+        for row in g2Dbo.fetchAllRows(g2Dbo.sqlExec(sub_select)):
+            feat_count += 1
+            feat_id = row[0]
+            ftype = self.ftypeLookup[row[1]]["FTYPE_CODE"]
+            feat_desc = row[2]
+            feat_cache[feat_id] = feat_desc
+            tblRows.append([colorize(feat_id, "row_title"), colorize_attr(ftype), feat_desc])
+
+        if feat_count == 0:
+            print_message("No features Found!", "error")
+            return
+
+        tblTitle = f"{feat_count} features with {ftype} {operator} {value}"
+        tblColumns = []
+        tblColumns.append({"name": "Feature ID", "width": 5, "align": "center"})
+        tblColumns.append({"name": "Code", "width": 25, "align": "center"})
+        tblColumns.append({"name": "Description", "width": 75, "align": "left"})
+        self.renderTable(tblTitle, tblColumns, tblRows)
+
+        getFlagList = ["G2_ENTITY_INCLUDE_ENTITY_NAME", "G2_ENTITY_INCLUDE_RECORD_DATA"]
+
+        tblColumns = []
+        tblColumns.append({"name": "Index", "width": 5, "align": "center"})
+        tblColumns.append({"name": "Entity ID", "width": 15, "align": "center"})
+        tblColumns.append({"name": "Entity Name", "width": 75, "align": "left"})
+        tblColumns.append({"name": "Data Sources", "width": 50, "align": "left"})
+        tblColumns.append({"name": "Feature", "width": 25, "align": "left"})
+        tblColumns.append({"name": "Description", "width": 75, "align": "left"})
+
+        entityCnt = 0
+        entity_cache = {}
+        tblRows = []
+        for lib_feat_id, feat_desc in feat_cache.items():
+
+            sql = f"select distinct RES_ENT_ID from RES_FEAT_EKEY where LIB_FEAT_ID = {lib_feat_id} order by RES_ENT_ID"
+            for row in g2Dbo.fetchAllRows(g2Dbo.sqlExec(sql)):
+                entity_id = row[0]
+                if entity_id in entity_cache:
+                    continue
+                entity_cache[entity_id] = True
+                entityCnt += 1
+                if entityCnt <= 1000:
+                    json_data = execute_api_call("getEntityByEntityID", getFlagList, entity_id)
+                    entity_name = json_data["RESOLVED_ENTITY"]["ENTITY_NAME"]
+                    dataSources = {}
+                    for record in json_data["RESOLVED_ENTITY"]["RECORDS"]:
+                        dataSource = record["DATA_SOURCE"]
+                        if dataSource not in dataSources:
+                            dataSources[dataSource] = [record["RECORD_ID"]]
+                        else:
+                            dataSources[dataSource].append(record["RECORD_ID"])
+                    dataSourceList = []
+                    for dataSource in dataSources:
+                        if len(dataSources[dataSource]) == 1:
+                            dataSourceList.append(colorize_dsrc(dataSource + ": " + dataSources[dataSource][0]))
+                        else:
+                            dataSourceList.append(
+                                colorize_dsrc(dataSource + ": " + str(len(dataSources[dataSource])) + " records")
+                            )
+
+                    tblRows.append(
+                        [
+                            colorize(entityCnt, "row_title"),
+                            colorize_entity(entity_id),
+                            entity_name,
+                            "\n".join(dataSourceList),
+                            colorize_attr(ftype),
+                            feat_desc,
+                        ]
+                    )
+
+        tblTitle = f"{entityCnt:,} Entities found"
+        self.renderTable(tblTitle, tblColumns, tblRows)
+        self.lastSearchResult = list(entity_cache.keys())
+
+    # ---------------------------
     def help_search(self):
         print(textwrap.dedent(f'''\
 
@@ -2273,6 +2420,10 @@ class G2CmdShell(cmd.Cmd):
     def do_search(self, arg):
         if not arg:
             self.help_search()
+            return
+
+        if arg.split()[0].upper() == 'FEATURE':
+            self.do_featureSearch(' '.join(arg.split()[1:]))
             return
 
         try:
@@ -5623,6 +5774,12 @@ if __name__ == '__main__':
     except Exception as err:
         print_message(err, 'error')
         sys.exit(1)
+
+    # try for database access
+    g2Dbo = None
+    with suppress(Exception):
+        g2dbUri = json.loads(iniParams)["SQL"]["CONNECTION"]
+        g2Dbo = G2Database(g2dbUri)
 
     # get needed config data
     try:
