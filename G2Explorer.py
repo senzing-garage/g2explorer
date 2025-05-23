@@ -21,13 +21,7 @@ from contextlib import suppress
 from datetime import datetime
 
 try:
-    from prettytable import PrettyTable
-    from prettytable import ALL as PRETTY_TABLE_ALL
-    try:  # Supports both ptable and prettytable builds of prettytable (only prettytable has these styles)
-        from prettytable import SINGLE_BORDER, DOUBLE_BORDER, MARKDOWN, ORGMODE
-        pretty_table_style_available = True
-    except:
-        pretty_table_style_available = False
+    import prettytable
 except:
     print('\nPlease install python pretty table (pip3 install prettytable)\n')
     sys.exit(1)
@@ -5313,15 +5307,12 @@ class G2CmdShell(cmd.Cmd):
         combineHeaders = kwargs.get('combineHeaders', False)
 
         # setup the table
-        tableObject = PrettyTable()
-        # tableObject.title = tblTitle
-        tableObject.hrules = PRETTY_TABLE_ALL
-        if pretty_table_style_available:
-            tableObject.set_style(SINGLE_BORDER)
-        else:
-            tableObject.horizontal_char = '\u2500'
-            tableObject.vertical_char = '\u2502'
-            tableObject.junction_char = '\u253C'
+        tableObject = prettytable.PrettyTable()
+        tableObject.title = tblTitle
+        tableObject.horizontal_char = '\u2500'
+        tableObject.vertical_char = '\u2502'
+        tableObject.junction_char = '\u253C'
+        tableObject.hrules = prettytable.ALL
 
         fieldNameList = []
         columnHeaderList = []
